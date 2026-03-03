@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Pixel Landscape - CONTROL</title>
+    <link rel="stylesheet" href="/src/style.css">
+    <link rel="manifest" href="./manifest.json">
+</head>
+
+<body class="control-screen">
+    <nav class="ctrl-nav">
+        <button class="ctrl-back-btn" onclick="location.href='/'">&#8592; 戻る</button>
+        <div id="gamepad-status" class="ctrl-gamepad-status">Controller: Disconnected</div>
+    </nav>
+
+    <main class="control-layout">
+        <!-- 左側: CAN通信ステータス -->
+        <div class="ctrl-panel">
+            <div class="ctrl-panel-title">CAN STATUS</div>
+            <div class="can-item error" id="can1-status">
+                <span class="can-indicator"></span>
+                <span class="can-label">CAN1</span>
+                <span class="can-state" id="can1-text">通信エラー</span>
+            </div>
+            <div class="can-item normal" id="can2-status">
+                <span class="can-indicator"></span>
+                <span class="can-label">CAN2</span>
+                <span class="can-state" id="can2-text">通信正常</span>
+            </div>
+            <button id="btn-can-reset" class="can-reset-btn">CAN RESET</button>
+        </div>
+
+        <!-- 右側: 速度選択 -->
+        <div class="ctrl-panel">
+            <div class="ctrl-panel-title">SPEED</div>
+            <div class="speed-options">
+                <label class="speed-label">
+                    <input type="radio" name="speed" value="high" class="speed-radio">
+                    <span class="speed-btn">高速</span>
+                </label>
+                <label class="speed-label">
+                    <input type="radio" name="speed" value="mid" class="speed-radio" checked>
+                    <span class="speed-btn">中速</span>
+                </label>
+                <label class="speed-label">
+                    <input type="radio" name="speed" value="low" class="speed-radio">
+                    <span class="speed-btn">低速</span>
+                </label>
+            </div>
+        </div>
+    </main>
+
+    <!-- 隔雅: 手動ボール発射ボタン -->
+    <button id="btn-fire-ctrl" class="fire-btn-ctrl">発射</button>
+
+    <script type="module" src="/src/gamepad.js"></script>
+</body>
+
+</html>

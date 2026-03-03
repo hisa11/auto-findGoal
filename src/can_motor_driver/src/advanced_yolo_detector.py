@@ -2,6 +2,7 @@
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Image
+from geometry_msgs.msg import Point
 from cv_bridge import CvBridge
 import cv2
 import numpy as np
@@ -63,6 +64,9 @@ class AdvancedYoloGoalDetector(Node):
         Image, '/camera/camera/color/image_raw', self.color_callback, 10)
     self.image_pub = self.create_publisher(
         Image, '/yolo/annotated_image', 10)
+    # ゴール位置情報パブリッシャー
+    # x=ゴール中心x[px], y=ゴール中心y[px], z=ゴール幅[px]
+    self.goal_pub = self.create_publisher(Point, '/yolo/goal_info', 10)
 
   def depth_callback(self, msg):
     try:
@@ -202,6 +206,13 @@ class AdvancedYoloGoalDetector(Node):
                      markerType=cv2.MARKER_CROSS, markerSize=20, thickness=2)
       cv2.putText(frame, f"Dist: {distance_mm} mm", (target_x + 10,
                   target_y + 10), cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0, 0, 255), 2)
+
+      # ゴール中心のx座標・y座標・幅をパブリッシュ（モータ追従用）
+      goal_msg = Point()
+      goal_msg.x = float(x1 + w // 2)  # ゴール中心x [px]
+      goal_msg.y = float(y1 + h // 2)  # ゴール中心y [px]
+      goal_msg.z = float(w)             # ゴール幅 [px]（デッドバンド計算用）
+      self.goal_pub.publish(goal_msg)
 
       # 推論したフレームにだけ表示するメッセージ（ログの垂れ流し防止）
       if self.frame_skip_counter == 0:

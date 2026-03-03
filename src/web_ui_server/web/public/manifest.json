@@ -1,0 +1,12 @@
+{
+  "name": "Pixel 9a LAN App",
+  "short_name": "PixelApp",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "landscape",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "icons": [
+    { "src": "icon-192.png", "type": "image/png", "sizes": "192x192" }
+  ]
+}

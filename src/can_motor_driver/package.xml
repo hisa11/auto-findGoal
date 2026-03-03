@@ -9,9 +9,23 @@
 
   <buildtool_depend>ament_cmake</buildtool_depend>
 
+  <!-- C++ ノードのビルド・実行依存 -->
   <depend>rclcpp</depend>
-  <depend>sensor_msgs</depend>
   <depend>std_msgs</depend>
+  <depend>sensor_msgs</depend>
+  <depend>geometry_msgs</depend>
+
+  <!-- Python ノード (yolo_goal_detector / advanced_yolo_detector) -->
+  <exec_depend>rclpy</exec_depend>
+  <exec_depend>cv_bridge</exec_depend>
+  <exec_depend>python3-opencv</exec_depend>
+  <exec_depend>python3-numpy</exec_depend>
+  <!-- ultralytics (YOLO推論): rosdep 未対応のため別途 pip install ultralytics -->
+
+  <!-- launch ファイルが起動するパッケージ -->
+  <exec_depend>joy</exec_depend>
+  <exec_depend>realsense2_camera</exec_depend>
+  <exec_depend>ros2launch</exec_depend>
 
   <test_depend>ament_lint_auto</test_depend>
   <test_depend>ament_lint_common</test_depend>

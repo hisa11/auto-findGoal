@@ -1,0 +1,425 @@
+/* 基本設定 */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  background-color: #000; /* 真っ黒 */
+  height: 100vh;
+  width: 100vw;
+  display: flex;
+  justify-content: center; /* 左右中央 */
+  align-items: center;     /* 上下中央 */
+  overflow: hidden;
+}
+
+.video-container {
+  height: 100vh; /* 高さ限界まで */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+/* 映像とレーザー枠 */
+.laser-frame {
+  height: 100%;    /* 高さを画面いっぱいに */
+  width: auto;     /* アスペクト比を維持（640x480なので4:3になる） */
+}
+
+/* AUTO: 緑の枠 */
+.laser-frame.status-auto {
+  border: 2px solid #00ff00;
+  box-shadow:
+    0 0 10px #00ff00,
+    0 0 20px #00ff00;
+  animation: laser-glow-auto 2s infinite alternate;
+}
+
+/* MANUAL: 赤の枠 */
+.laser-frame.status-manual {
+  border: 2px solid #ff0000;
+  box-shadow:
+    0 0 10px #ff0000,
+    0 0 20px #ff0000;
+  animation: laser-glow-manual 2s infinite alternate;
+}
+
+@keyframes laser-glow-auto {
+  from {
+    box-shadow: 0 0 10px #00ff00, 0 0 20px #00ff00;
+    opacity: 0.9;
+  }
+  to {
+    box-shadow: 0 0 15px #00ff00, 0 0 35px #00ff00;
+    opacity: 1;
+  }
+}
+
+@keyframes laser-glow-manual {
+  from {
+    box-shadow: 0 0 10px #ff0000, 0 0 20px #ff0000;
+    opacity: 0.9;
+  }
+  to {
+    box-shadow: 0 0 15px #ff0000, 0 0 35px #ff0000;
+    opacity: 1;
+  }
+}
+.nav-button {
+  position: absolute;
+  bottom: 20px;
+  right: env(safe-area-inset-right, 20px); /* Pixel 9aの端に合わせる */
+  padding: 10px 20px;
+  background: rgba(255, 0, 0, 0.5);
+  color: white;
+  border: 1px solid #ff0000;
+  cursor: pointer;
+}
+.portal-screen {
+    background: #000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+.selection-container {
+    display: flex;
+    gap: 40px;
+    width: 80%;
+}
+.mode-card {
+    flex: 1;
+    padding: 40px;
+    border: 2px solid #333;
+    text-align: center;
+    color: #fff;
+    cursor: pointer;
+    transition: 0.3s;
+}
+.mode-card.gunner { border-color: #ff0000; box-shadow: 0 0 15px rgba(255,0,0,0.3); }
+.mode-card.control { border-color: #00ff00; box-shadow: 0 0 15px rgba(0,255,0,0.3); }
+.mode-card:active { transform: scale(0.95); opacity: 0.8; }
+
+.ui-overlay {
+  display: flex;
+  width: 100vw;
+  height: 100vh;
+  padding-left: env(safe-area-inset-left, 20px); /* パンチホール対策 */
+  align-items: center;
+}
+
+.sidebar-left {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  margin-right: 40px;
+}
+
+.sliders-row {
+  display: flex;
+  gap: 30px;
+}
+
+.control-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  opacity: 0.5;
+  transition: 0.3s;
+}
+
+/* 選択されている方のスライダーを光らせる */
+.control-group.active {
+  opacity: 1;
+  filter: drop-shadow(0 0 10px #ff0000);
+}
+
+.slider-track {
+  width: 15px;
+  height: 250px;
+  background: #222;
+  border: 1px solid #444;
+  position: relative;
+  margin: 10px 0;
+}
+
+.slider-bar {
+  width: 100%;
+  background: #ff0000;
+  position: absolute;
+  bottom: 0;
+  height: 50%; /* JSで可変にする */
+  box-shadow: 0 0 15px #ff0000;
+}
+
+.slider-label, .value-display {
+  color: #fff;
+  font-family: monospace;
+  font-size: 14px;
+}
+
+/* ロックボタン */
+.lock-btn {
+  display: block;
+  width: 100%;
+  margin-bottom: 10px;
+  padding: 6px 0;
+  font-size: 20px;
+  background: transparent;
+  border: 2px solid #555;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: 0.2s;
+  text-align: center;
+}
+.lock-btn.locked {
+  border-color: #ff4444;
+  box-shadow: 0 0 8px #ff4444;
+}
+.lock-btn.unlocked {
+  border-color: #00ff00;
+  box-shadow: 0 0 8px #00ff00;
+}
+
+/* 右側のレイアウト */
+.sidebar-right {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  margin-left: 40px;
+  padding-right: env(safe-area-inset-right, 20px);
+  align-items: center;
+}
+
+/* モード表示ラベル */
+.mode-label {
+  font-family: monospace;
+  font-size: 36px;
+  font-weight: bold;
+  letter-spacing: 4px;
+  text-align: center;
+  border: none;
+  background: transparent;
+}
+
+.status-auto .mode-label,
+.mode-label.status-auto {
+  color: #00ff00;
+}
+
+.status-manual .mode-label,
+.mode-label.status-manual {
+  color: #ff3333;
+}
+
+/* 発射ボタン：常にアクティブな見た目にする */
+.fire-btn {
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: transparent;
+  border: 4px solid #fff; /* 標準は白 */
+  color: #fff;
+  font-weight: bold;
+  font-size: 18px;
+  transition: 0.1s;
+  opacity: 1; /* 常に1 */
+}
+
+/* モードごとのボタンの色 */
+.status-auto .fire-btn {
+  border-color: #00ff00;
+  color: #00ff00;
+  box-shadow: 0 0 10px #00ff00;
+}
+
+.status-manual .fire-btn {
+  border-color: #ff0000;
+  color: #ff0000;
+  box-shadow: 0 0 10px #ff0000;
+}
+
+/* 押下時：モードに関わらず赤く光る（発射の強調） */
+.fire-btn.active {
+  background: #ff0000 !important;
+  color: #000 !important;
+  box-shadow: 0 0 40px #ff0000 !important;
+  transform: scale(1.1);
+}
+
+/* =====================
+   CONTROL画面
+   ===================== */
+.control-screen {
+    background: #000;
+    color: #fff;
+    height: 100vh;
+    width: 100vw;
+    display: flex;
+    flex-direction: column;
+    font-family: monospace;
+    overflow: hidden;
+    position: relative;
+}
+
+.ctrl-nav {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    padding: 12px 20px;
+    border-bottom: 1px solid #333;
+    flex-shrink: 0;
+}
+
+.ctrl-back-btn {
+    background: transparent;
+    color: #aaa;
+    border: 1px solid #444;
+    padding: 6px 16px;
+    font-family: monospace;
+    font-size: 14px;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: 0.2s;
+}
+.ctrl-back-btn:active { color: #fff; border-color: #fff; }
+
+.ctrl-gamepad-status {
+    font-size: 13px;
+    color: #666;
+}
+
+.control-layout {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    justify-content: center;
+    gap: 80px;
+    padding: 20px;
+}
+
+.ctrl-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+    min-width: 160px;
+}
+
+.ctrl-panel-title {
+    font-size: 11px;
+    letter-spacing: 3px;
+    color: #555;
+    border-bottom: 1px solid #333;
+    padding-bottom: 8px;
+}
+
+/* CANステータス */
+.can-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    border: 1px solid #333;
+    border-radius: 6px;
+    background: #0a0a0a;
+}
+
+.can-indicator {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: #444;
+    flex-shrink: 0;
+}
+
+#can1-status.error .can-indicator,
+#can2-status.error .can-indicator { background: #ff3333; box-shadow: 0 0 8px #ff3333; }
+#can1-status.normal .can-indicator,
+#can2-status.normal .can-indicator { background: #00ff00; box-shadow: 0 0 8px #00ff00; }
+#can1-status.error .can-state,
+#can2-status.error .can-state { color: #ff3333; }
+#can1-status.normal .can-state,
+#can2-status.normal .can-state { color: #00ff00; }
+
+.can-label { font-size: 16px; font-weight: bold; flex: 1; color: #fff; }
+.can-state  { font-size: 13px; color: #888; }
+
+.can-reset-btn {
+    width: 100%;
+    padding: 10px 0;
+    background: transparent;
+    border: 2px solid #ff8800;
+    border-radius: 6px;
+    color: #ff8800;
+    font-family: monospace;
+    font-size: 14px;
+    letter-spacing: 2px;
+    cursor: pointer;
+    transition: 0.15s;
+}
+.can-reset-btn:active {
+    background: #ff8800;
+    color: #000;
+    box-shadow: 0 0 20px #ff8800;
+}
+
+/* 速度選択 */
+.speed-options {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.speed-label { cursor: pointer; }
+
+.speed-radio { display: none; }
+
+.speed-btn {
+    display: block;
+    padding: 12px 40px;
+    border: 2px solid #444;
+    border-radius: 6px;
+    text-align: center;
+    font-family: monospace;
+    font-size: 18px;
+    color: #666;
+    background: #0a0a0a;
+    transition: 0.15s;
+    letter-spacing: 3px;
+}
+
+.speed-radio:checked + .speed-btn {
+    border-color: #ff0000;
+    color: #fff;
+    box-shadow: 0 0 10px rgba(255, 0, 0, 0.5);
+    background: rgba(255, 0, 0, 0.08);
+}
+
+/* 発射ボタン */
+.fire-btn-ctrl {
+    position: absolute;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 20px);
+    right: calc(env(safe-area-inset-right, 0px) + 20px);
+    width: 110px;
+    height: 110px;
+    border-radius: 50%;
+    background: transparent;
+    border: 4px solid #ff0000;
+    color: #ff0000;
+    font-family: monospace;
+    font-size: 18px;
+    font-weight: bold;
+    letter-spacing: 2px;
+    box-shadow: 0 0 10px rgba(255, 0, 0, 0.4);
+    cursor: pointer;
+    transition: 0.1s;
+}
+
+.fire-btn-ctrl.active {
+    background: #ff0000;
+    color: #000;
+    box-shadow: 0 0 40px #ff0000;
+    transform: scale(1.1);
+}

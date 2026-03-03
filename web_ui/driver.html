@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Driver Console</title>
+    <script src="https://cdn.jsdelivr.net/npm/eventemitter2@6.4.9/lib/eventemitter2.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/roslib@1/build/roslib.min.js"></script>
+</head>
+<body style="background-color: #222; color: white; text-align: center; font-family: sans-serif;">
+    <h1>🤖 Driver Console</h1>
+    <p id="status" style="color: yellow;">ROS 2に接続中...</p>
+    <p>PS4コントローラーを繋いで、スティックを動かしてください</p>
+    
+    <h2>Gamepad Data:</h2>
+    <div id="gamepad-info" style="font-size: 24px; color: #0f0;">-</div>
+
+    <script>
+        // 1. ROS 2への接続設定（ロボットのIPアドレスに変更してください）
+        const ros = new ROSLIB.Ros({
+            url : 'ws://localhost:9090' // ※スマホから見る時は 'ws://192.168.x.x:9090' にします
+        });
+
+        ros.on('connection', () => { document.getElementById('status').innerText = "✅ ROS 2 接続完了！"; document.getElementById('status').style.color = "lime"; });
+        ros.on('error', (error) => { document.getElementById('status').innerText = "❌ エラー発生"; });
+        ros.on('close', () => { document.getElementById('status').innerText = "⚠️ 切断されました"; });
+
+        // 2. 送信するトピック（/joy_driver）の定義
+        const joyTopic = new ROSLIB.Topic({
+            ros : ros,
+            name : '/joy_driver',
+            messageType : 'sensor_msgs/msg/Joy'
+        });
+
+        // 3. ゲームパッドの読み取りと送信ループ
+        function updateGamepad() {
+            const gamepads = navigator.getGamepads();
+            if (gamepads[0]) {
+                const gp = gamepads[0];
+                
+                // 例：左スティックの上下(axes[1])と左右(axes[0])
+                const forward = -gp.axes[1]; // 上に倒すとマイナスになる仕様なので反転
+                const turn = -gp.axes[0];
+
+                document.getElementById('gamepad-info').innerText = 
+                    `前進: ${forward.toFixed(2)} | 旋回: ${turn.toFixed(2)}`;
+
+                // ROS 2にJoyメッセージをPublish
+                const joyMsg = new ROSLIB.Message({
+                    axes: [turn, forward, 0.0, 0.0, 0.0, 0.0],
+                    buttons: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0] // PS4ボタンの状態をここに入れる
+                });
+                joyTopic.publish(joyMsg);
+            }
+            // 画面の更新に合わせてループ実行 (約60FPS)
+            requestAnimationFrame(updateGamepad);
+        }
+
+        // ループ開始
+        updateGamepad();
+    </script>
+</body>
+</html>

@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>Pixel 9a Monitor</title>
+    <link rel="stylesheet" href="/src/style.css">
+    <link rel="manifest" href="./manifest.json">
+</head>
+
+<body>
+    <div class="ui-overlay">
+        <div class="sidebar-left">
+            <button id="btn-lock" class="lock-btn locked">🔒</button>
+            <div class="sliders-row">
+                <div class="control-group" id="group-exposure">
+                    <div class="slider-label">EXP</div>
+                    <div class="slider-track">
+                        <div id="bar-exposure" class="slider-bar"></div>
+                    </div>
+                    <div id="val-exposure" class="value-display">0</div>
+                </div>
+
+                <div class="control-group" id="group-gain">
+                    <div class="slider-label">GAIN</div>
+                    <div class="slider-track">
+                        <div id="bar-gain" class="slider-bar"></div>
+                    </div>
+                    <div id="val-gain" class="value-display">0</div>
+                </div>
+            </div>
+        </div>
+
+
+        <div class="video-container">
+            <img src="https://placehold.jp/24/00ff00/ffffff/640x480.png?text=CAMERA" id="main-frame"
+                class="laser-frame status-auto">
+        </div>
+
+        <div class="sidebar-right">
+            <div id="mode-indicator" class="mode-label status-auto">AUTO</div>
+
+            <div class="button-group">
+                <button id="btn-fire" class="fire-btn">MANUAL FIRE</button>
+            </div>
+        </div>
+    </div>
+    <script type="module" src="src/main.js"></script>
+</body>
+
+</html>
