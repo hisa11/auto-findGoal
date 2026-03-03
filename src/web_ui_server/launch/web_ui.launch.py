@@ -16,34 +16,34 @@ from launch_ros.actions import Node
 
 
 def generate_launch_description():
-    return LaunchDescription([
-        # ---- 起動引数 ----
-        DeclareLaunchArgument(
-            'host',
-            default_value='0.0.0.0',
-            description='バインドするIPアドレス（デフォルト: 全インターフェース）',
-        ),
-        DeclareLaunchArgument(
-            'port',
-            default_value='8443',
-            description='リッスンするポート番号（443は root 権限が必要）',
-        ),
-        DeclareLaunchArgument(
-            'use_https',
-            default_value='true',
-            description='HTTPS（TLS）を使用するか（true/false）',
-        ),
+  return LaunchDescription([
+      # ---- 起動引数 ----
+      DeclareLaunchArgument(
+          'host',
+          default_value='0.0.0.0',
+          description='バインドするIPアドレス（デフォルト: 全インターフェース）',
+      ),
+      DeclareLaunchArgument(
+          'port',
+          default_value='8443',
+          description='リッスンするポート番号（443は root 権限が必要）',
+      ),
+      DeclareLaunchArgument(
+          'use_https',
+          default_value='true',
+          description='HTTPS（TLS）を使用するか（true/false）',
+      ),
 
-        # ---- Webサーバーノード ----
-        Node(
-            package='web_ui_server',
-            executable='server_node',
-            name='web_ui_server',
-            output='screen',
-            parameters=[{
-                'host':      LaunchConfiguration('host'),
-                'port':      LaunchConfiguration('port'),
-                'use_https': LaunchConfiguration('use_https'),
-            }],
-        ),
-    ])
+      # ---- Webサーバーノード ----
+      Node(
+          package='web_ui_server',
+          executable='server_node',
+          name='web_ui_server',
+          output='screen',
+          parameters=[{
+              'host': LaunchConfiguration('host'),
+              'port': LaunchConfiguration('port'),
+              'use_https': LaunchConfiguration('use_https'),
+          }],
+      ),
+  ])

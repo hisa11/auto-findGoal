@@ -5,17 +5,17 @@ from setuptools import find_packages, setup
 package_name = 'web_ui_server'
 
 def collect_web_files(web_root):
-    """webディレクトリ以下のすべてのファイルをインストールリストに収集する"""
-    data_files = []
-    for dirpath, dirnames, filenames in os.walk(web_root):
-        # .git などは除外
-        dirnames[:] = [d for d in dirnames if not d.startswith('.')]
-        if not filenames:
-            continue
-        install_dir = os.path.join('share', package_name, dirpath)
-        files = [os.path.join(dirpath, f) for f in filenames]
-        data_files.append((install_dir, files))
-    return data_files
+  """webディレクトリ以下のすべてのファイルをインストールリストに収集する"""
+  data_files = []
+  for dirpath, dirnames, filenames in os.walk(web_root):
+    # .git などは除外
+    dirnames[:] = [d for d in dirnames if not d.startswith('.')]
+    if not filenames:
+      continue
+    install_dir = os.path.join('share', package_name, dirpath)
+    files = [os.path.join(dirpath, f) for f in filenames]
+    data_files.append((install_dir, files))
+  return data_files
 
 data_files = [
     ('share/ament_index/resource_index/packages', ['resource/' + package_name]),
