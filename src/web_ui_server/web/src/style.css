@@ -334,14 +334,18 @@ body {
     flex-shrink: 0;
 }
 
-#can1-status.error .can-indicator,
-#can2-status.error .can-indicator { background: #ff3333; box-shadow: 0 0 8px #ff3333; }
-#can1-status.normal .can-indicator,
-#can2-status.normal .can-indicator { background: #00ff00; box-shadow: 0 0 8px #00ff00; }
-#can1-status.error .can-state,
-#can2-status.error .can-state { color: #ff3333; }
-#can1-status.normal .can-state,
-#can2-status.normal .can-state { color: #00ff00; }
+#can0-status.error .can-indicator,
+#can1-status.error .can-indicator { background: #ff3333; box-shadow: 0 0 8px #ff3333; }
+#can0-status.normal .can-indicator,
+#can1-status.normal .can-indicator { background: #00ff00; box-shadow: 0 0 8px #00ff00; }
+#can0-status.unknown .can-indicator,
+#can1-status.unknown .can-indicator { background: #888; box-shadow: none; }
+#can0-status.error .can-state,
+#can1-status.error .can-state { color: #ff3333; }
+#can0-status.normal .can-state,
+#can1-status.normal .can-state { color: #00ff00; }
+#can0-status.unknown .can-state,
+#can1-status.unknown .can-state { color: #888; }
 
 .can-label { font-size: 16px; font-weight: bold; flex: 1; color: #fff; }
 .can-state  { font-size: 13px; color: #888; }

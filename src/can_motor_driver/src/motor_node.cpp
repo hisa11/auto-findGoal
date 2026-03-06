@@ -116,8 +116,8 @@ class VescOmniNode : public rclcpp::Node {
                           std::bind(&VescOmniNode::watchdog_callback, this));
 
     // CAN1 ステータスパブリッシャー
-    can1_status_pub_ = create_publisher<std_msgs::msg::Bool>(
-        "/can_status/can1", rclcpp::QoS(1).transient_local());
+    can1_status_pub_ = create_publisher<std_msgs::msg::Bool>("/can_status/can1",
+                                                             rclcpp::QoS(1));
 
     // 500ms ごとに CAN1 状態をパブリッシュ
     can_status_timer_ =

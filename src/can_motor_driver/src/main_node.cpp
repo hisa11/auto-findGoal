@@ -73,7 +73,7 @@ class MainControllerNode : public rclcpp::Node {
 
     // CAN0 ステータスパブリッシャー
     can0_status_pub_ = this->create_publisher<std_msgs::msg::Bool>(
-        "/can_status/can0", rclcpp::QoS(1).transient_local());
+        "/can_status/can0", rclcpp::QoS(1));
 
     // 500ms ごとに CAN0 状態をパブリッシュ
     can_status_timer_ = this->create_wall_timer(
