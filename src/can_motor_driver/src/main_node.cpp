@@ -2,6 +2,7 @@
 #include <cmath>
 #include <geometry_msgs/msg/point.hpp>
 #include <rclcpp/rclcpp.hpp>
+#include <std_msgs/msg/bool.hpp>
 
 // 作成した自作ライブラリを読み込む
 #include "can_motor_driver/dm_motor.hpp"
@@ -69,6 +70,15 @@ class MainControllerNode : public rclcpp::Node {
         std::bind(&MainControllerNode::timer_callback, this));
 
     last_goal_time_ = this->now();
+
+    // CAN0 ステータスパブリッシャー
+    can0_status_pub_ = this->create_publisher<std_msgs::msg::Bool>(
+        "/can_status/can0", rclcpp::QoS(1).transient_local());
+
+    // 500ms ごとに CAN0 状態をパブリッシュ
+    can_status_timer_ = this->create_wall_timer(
+        std::chrono::milliseconds(500),
+        std::bind(&MainControllerNode::publish_can0_status, this));
 
     RCLCPP_INFO(this->get_logger(),
                 "ゴール追従モード起動。pitch=%.1f度 (固定), yaw=VELOCITY追従",
@@ -143,11 +153,19 @@ class MainControllerNode : public rclcpp::Node {
     startup_count_++;
   }
 
+  void publish_can0_status() {
+    std_msgs::msg::Bool msg;
+    msg.data = can_bus_ && can_bus_->is_open();
+    can0_status_pub_->publish(msg);
+  }
+
   std::shared_ptr<UsbCan> can_bus_;
   std::shared_ptr<DMMotor> motor1_;
   std::shared_ptr<DMMotor> motor2_;
   rclcpp::Subscription<geometry_msgs::msg::Point>::SharedPtr goal_sub_;
   rclcpp::TimerBase::SharedPtr timer_;
+  rclcpp::TimerBase::SharedPtr can_status_timer_;
+  rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr can0_status_pub_;
 
   int startup_count_;
   float goal_cx_;

@@ -19,6 +19,8 @@ export class ROSBridge {
     this._ws = null;
     this._ready = false;
     this._advertised = new Set();
+    this._subscribed = new Set();
+    this._subscribers = {}; // topic -> [callback, ...]
     this._queue = []; // 接続前のメッセージを一時格納
     this._statusEl = null;
     this._connect();
@@ -50,6 +52,19 @@ export class ROSBridge {
       // 接続前にキューされたメッセージをすべて送信
       for (const m of this._queue) this._ws.send(m);
       this._queue = [];
+      // 再接続時は済みサブスクリプションを再登録
+      for (const topic of this._subscribed) {
+        const entries = this._subscribers[topic];
+        if (entries && entries.length > 0) {
+          this._ws.send(
+            JSON.stringify({
+              op: "subscribe",
+              topic,
+              type: entries[0].msgType,
+            }),
+          );
+        }
+      }
     };
 
     this._ws.onclose = () => {
@@ -63,6 +78,19 @@ export class ROSBridge {
     this._ws.onerror = () => {
       this._applyStatus(false);
     };
+
+    this._ws.onmessage = (event) => {
+      try {
+        const msg = JSON.parse(event.data);
+        if (msg.op === "publish" && msg.topic && this._subscribers[msg.topic]) {
+          for (const { callback } of this._subscribers[msg.topic]) {
+            callback(msg.msg);
+          }
+        }
+      } catch (e) {
+        console.warn("[ROS] onmessage parse error:", e);
+      }
+    };
   }
 
   _send(obj) {
@@ -73,6 +101,39 @@ export class ROSBridge {
       // キューが溢れないように上限を設定
       if (this._queue.length < 20) this._queue.push(str);
     }
+  }
+
+  /**
+   * トピックをサブスクライブする
+   * @param {string}   topic     トピック名
+   * @param {string}   msgType   メッセージ型 (例: 'std_msgs/msg/Bool')
+   * @param {function} callback  受信コールバック (msg) => void
+   * @returns {function} コールするとサブスクリプションを解除できる関数
+   */
+  subscribe(topic, msgType, callback) {
+    if (!this._subscribers[topic]) {
+      this._subscribers[topic] = [];
+    }
+    const entry = { msgType, callback };
+    this._subscribers[topic].push(entry);
+
+    if (!this._subscribed.has(topic)) {
+      this._subscribed.add(topic);
+      this._send({ op: "subscribe", topic, type: msgType });
+    }
+
+    // 返値は登録解除用関数
+    return () => {
+      const arr = this._subscribers[topic];
+      if (!arr) return;
+      const idx = arr.indexOf(entry);
+      if (idx !== -1) arr.splice(idx, 1);
+      if (arr.length === 0) {
+        delete this._subscribers[topic];
+        this._subscribed.delete(topic);
+        this._send({ op: "unsubscribe", topic });
+      }
+    };
   }
 
   /**

@@ -20,6 +20,28 @@ function applyDead(v) {
   return Math.abs(v) > STICK_DEAD ? v : 0.0;
 }
 
+// ---- CAN ステータス UI 更新 ----
+function updateCanStatus(canId, isOk) {
+  const container = document.getElementById(`${canId}-status`);
+  const text = document.getElementById(`${canId}-text`);
+  if (!container || !text) return;
+  if (isOk) {
+    container.className = "can-item normal";
+    text.textContent = "通信正常";
+  } else {
+    container.className = "can-item error";
+    text.textContent = "通信エラー";
+  }
+}
+
+// CAN0 / CAN1 ステータスをリアルタイムでサブスクライブ
+ros.subscribe("/can_status/can0", "std_msgs/msg/Bool", (msg) => {
+  updateCanStatus("can0", msg.data);
+});
+ros.subscribe("/can_status/can1", "std_msgs/msg/Bool", (msg) => {
+  updateCanStatus("can1", msg.data);
+});
+
 /** オムニ方向表示 — の dot と数値を更新 */
 function updateOmniDisplay(vx, vy, wz) {
   const dot = document.getElementById("omni-dot");

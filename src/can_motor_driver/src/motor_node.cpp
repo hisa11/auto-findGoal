@@ -35,6 +35,7 @@
 #include <cstring>
 #include <geometry_msgs/msg/twist.hpp>
 #include <rclcpp/rclcpp.hpp>
+#include <std_msgs/msg/bool.hpp>
 #include <string>
 
 // ============================================================
@@ -113,6 +114,15 @@ class VescOmniNode : public rclcpp::Node {
     watchdog_timer_ =
         create_wall_timer(std::chrono::milliseconds(100),
                           std::bind(&VescOmniNode::watchdog_callback, this));
+
+    // CAN1 ステータスパブリッシャー
+    can1_status_pub_ = create_publisher<std_msgs::msg::Bool>(
+        "/can_status/can1", rclcpp::QoS(1).transient_local());
+
+    // 500ms ごとに CAN1 状態をパブリッシュ
+    can_status_timer_ =
+        create_wall_timer(std::chrono::milliseconds(500),
+                          std::bind(&VescOmniNode::publish_can1_status, this));
 
     RCLCPP_INFO(
         get_logger(),
@@ -197,7 +207,16 @@ class VescOmniNode : public rclcpp::Node {
       RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 1000,
                            "CAN 送信失敗 (ID=0x%02X): %s", vesc_id,
                            std::strerror(errno));
+      can1_send_ok_ = false;
+    } else {
+      can1_send_ok_ = true;
     }
+  }
+
+  void publish_can1_status() {
+    std_msgs::msg::Bool msg;
+    msg.data = (can_socket_ >= 0) && can1_send_ok_;
+    can1_status_pub_->publish(msg);
   }
 
   // ----------------------------------------------------------
@@ -206,10 +225,13 @@ class VescOmniNode : public rclcpp::Node {
   int can_socket_;
   struct sockaddr_can addr_;
   struct ifreq ifr_;
+  bool can1_send_ok_{false};
 
   rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr cmd_sub_;
   rclcpp::TimerBase::SharedPtr send_timer_;
   rclcpp::TimerBase::SharedPtr watchdog_timer_;
+  rclcpp::TimerBase::SharedPtr can_status_timer_;
+  rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr can1_status_pub_;
   rclcpp::Time last_cmd_time_{0, 0, RCL_ROS_TIME};
   int32_t target_erpm_[4]{0, 0, 0, 0};  // FL, FR, RL, RR
 };

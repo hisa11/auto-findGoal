@@ -20,15 +20,15 @@
         <!-- 左側: CAN通信ステータス -->
         <div class="ctrl-panel">
             <div class="ctrl-panel-title">CAN STATUS</div>
-            <div class="can-item error" id="can1-status">
+            <div class="can-item error" id="can0-status">
+                <span class="can-indicator"></span>
+                <span class="can-label">CAN0</span>
+                <span class="can-state" id="can0-text">通信エラー</span>
+            </div>
+            <div class="can-item normal" id="can1-status">
                 <span class="can-indicator"></span>
                 <span class="can-label">CAN1</span>
-                <span class="can-state" id="can1-text">通信エラー</span>
-            </div>
-            <div class="can-item normal" id="can2-status">
-                <span class="can-indicator"></span>
-                <span class="can-label">CAN2</span>
-                <span class="can-state" id="can2-text">通信正常</span>
+                <span class="can-state" id="can1-text">通信正常</span>
             </div>
             <button id="btn-can-reset" class="can-reset-btn">CAN RESET</button>
         </div>

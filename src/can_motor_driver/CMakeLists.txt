@@ -43,6 +43,7 @@ target_compile_features(motor_node PUBLIC c_std_99 cxx_std_17)
 
 ament_target_dependencies(motor_node
   rclcpp
+  std_msgs
   geometry_msgs
 )
 
