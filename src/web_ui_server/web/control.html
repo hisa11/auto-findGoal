@@ -13,6 +13,7 @@
     <nav class="ctrl-nav">
         <button class="ctrl-back-btn" onclick="location.href='/'">&#8592; 戻る</button>
         <div id="gamepad-status" class="ctrl-gamepad-status">Controller: Disconnected</div>
+        <div id="ros-ctrl-status" class="ros-status">ROS: -</div>
     </nav>
 
     <main class="control-layout">
@@ -52,7 +53,25 @@
         </div>
     </main>
 
-    <!-- 隔雅: 手動ボール発射ボタン -->
+    <!-- オムニ速度モニター（左下） -->
+    <div class="omni-monitor">
+        <div class="omni-pad">
+            <div id="omni-dot" class="omni-dot"></div>
+        </div>
+        <div class="omni-info">
+            <div class="omni-vals">
+                <div class="omni-val-row"><span class="omni-key">VX</span><span id="omni-vx">0.00</span></div>
+                <div class="omni-val-row"><span class="omni-key">VY</span><span id="omni-vy">0.00</span></div>
+                <div class="omni-val-row"><span class="omni-key">WZ</span><span id="omni-wz">0.00</span></div>
+            </div>
+            <div class="wz-track">
+                <div class="wz-center-line"></div>
+                <div id="wz-bar" class="wz-bar"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 手動ボール発射ボタン -->
     <button id="btn-fire-ctrl" class="fire-btn-ctrl">発射</button>
 
     <script type="module" src="/src/gamepad.js"></script>

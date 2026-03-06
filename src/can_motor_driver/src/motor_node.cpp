@@ -1,3 +1,27 @@
+// ============================================================
+// VESC 4輪オムニドライブ ノード
+//
+// /cmd_vel (geometry_msgs/Twist) を購読し、
+// 4輪オムニホイール逆運動学によって各 VESC へ
+// SocketCAN 経由で RPM 指令を送信します。
+//
+// 座標系 (右手系):
+//   linear.x  : 前進方向速度 [m/s]
+//   linear.y  : 左方向速度   [m/s]
+//   angular.z : 反時計回り旋回速度 [rad/s]
+//
+// ホイール配置 (上面視):
+//   FL --- FR
+//   |       |
+//   RL --- RR
+//
+// オムニホイール逆運動学:
+//   v_FL = +vx - vy - wz * R
+//   v_FR = +vx + vy + wz * R
+//   v_RL = +vx + vy - wz * R
+//   v_RR = +vx - vy + wz * R
+// ============================================================
+
 #include <linux/can.h>
 #include <linux/can/raw.h>
 #include <net/if.h>
@@ -5,94 +29,194 @@
 #include <sys/socket.h>
 #include <unistd.h>
 
-#include <cerrno>  // エラー番号を扱うために追加
+#include <algorithm>
+#include <cerrno>
+#include <cmath>
 #include <cstring>
+#include <geometry_msgs/msg/twist.hpp>
 #include <rclcpp/rclcpp.hpp>
-#include <sensor_msgs/msg/joy.hpp>
 #include <string>
 
-class MotorNode : public rclcpp::Node {
+// ============================================================
+// ★ チューニング用パラメータ
+// ============================================================
+// VESC の CAN ID (各ホイールに割り当て)
+// VESC Tool の Motor Configuration → General → Motor ID に合わせる
+static constexpr uint8_t VESC_ID_FL = 1;  // 前左
+static constexpr uint8_t VESC_ID_FR = 2;  // 前右
+static constexpr uint8_t VESC_ID_RL = 3;  // 後左
+static constexpr uint8_t VESC_ID_RR = 4;  // 後右
+
+// ロボット中心からホイールまでの距離 (旋回半径) [m]
+static constexpr double ROBOT_RADIUS = 0.15;
+
+// MAX_SPEED_MPS [m/s] のときに送る ERPM 値
+// ERPM = 機械RPM × 極ペア数 なので VESC Tool の「Max ERPM」に合わせる
+static constexpr double MAX_SPEED_MPS = 1.5;  // 実機の最大直動速度 [m/s]
+static constexpr int32_t MAX_ERPM = 30000;    // 上記速度に対応する ERPM
+
+// VESC CAN コマンド ID
+static constexpr uint8_t COMM_SET_RPM = 3;
+// ============================================================
+
+/// @brief 速度 [m/s] → ERPM へ変換 (線形スケーリング)
+static inline int32_t mps_to_erpm(double vel_mps) {
+  double erpm = vel_mps / MAX_SPEED_MPS * static_cast<double>(MAX_ERPM);
+  erpm = std::clamp(erpm, -static_cast<double>(MAX_ERPM),
+                    static_cast<double>(MAX_ERPM));
+  return static_cast<int32_t>(erpm);
+}
+
+class VescOmniNode : public rclcpp::Node {
  public:
-  MotorNode() : Node("motor_node"), can_socket_(-1) {
-    // --- SocketCANの初期化 ---
-    if ((can_socket_ = socket(PF_CAN, SOCK_RAW, CAN_RAW)) < 0) {
-      RCLCPP_ERROR(this->get_logger(), "ソケット作成失敗");
+  VescOmniNode() : Node("vesc_omni_node"), can_socket_(-1) {
+    // --- SocketCAN 初期化 ---
+    can_socket_ = socket(PF_CAN, SOCK_RAW, CAN_RAW);
+    if (can_socket_ < 0) {
+      RCLCPP_ERROR(get_logger(), "SocketCAN: ソケット作成失敗 (%s)",
+                   std::strerror(errno));
       return;
     }
 
-    std::strcpy(ifr_.ifr_name, "can0");
+    std::strncpy(ifr_.ifr_name, "can1", IFNAMSIZ - 1);
     if (ioctl(can_socket_, SIOCGIFINDEX, &ifr_) < 0) {
-      RCLCPP_ERROR(this->get_logger(), "インターフェース取得失敗");
+      RCLCPP_ERROR(get_logger(), "SocketCAN: インターフェース取得失敗 (%s)",
+                   std::strerror(errno));
+      close(can_socket_);
+      can_socket_ = -1;
       return;
     }
 
     addr_.can_family = AF_CAN;
     addr_.can_ifindex = ifr_.ifr_ifindex;
-
-    if (bind(can_socket_, (struct sockaddr*)&addr_, sizeof(addr_)) < 0) {
-      RCLCPP_ERROR(this->get_logger(),
-                   "バインド失敗。can0の状態を確認してください");
+    if (bind(can_socket_, reinterpret_cast<struct sockaddr*>(&addr_),
+             sizeof(addr_)) < 0) {
+      RCLCPP_ERROR(get_logger(),
+                   "SocketCAN: バインド失敗。can1 を確認してください (%s)",
+                   std::strerror(errno));
+      close(can_socket_);
+      can_socket_ = -1;
       return;
     }
 
-    // 送信データの初期化（すべて0）
-    std::memset(pwm_outputs_, 0, sizeof(pwm_outputs_));
+    // --- /cmd_vel 購読 (受信時は ERPM 値を更新するだけ) ---
+    cmd_sub_ = create_subscription<geometry_msgs::msg::Twist>(
+        "/cmd_vel", 10,
+        std::bind(&VescOmniNode::cmd_callback, this, std::placeholders::_1));
 
-    // --- ROS2の設定 ---
-    joy_sub_ = this->create_subscription<sensor_msgs::msg::Joy>(
-        "joy", 10,
-        std::bind(&MotorNode::joy_callback, this, std::placeholders::_1));
+    // 30ms 周期で4輪まとめて CAN 送信
+    send_timer_ =
+        create_wall_timer(std::chrono::milliseconds(30),
+                          std::bind(&VescOmniNode::send_timer_callback, this));
 
-    // 30msごとに送信
-    timer_ =
-        this->create_wall_timer(std::chrono::milliseconds(30),
-                                std::bind(&MotorNode::timer_callback, this));
+    // 安全停止ウォッチドッグ: 200ms 以上 cmd_vel が来なければ ERPM を 0 に
+    watchdog_timer_ =
+        create_wall_timer(std::chrono::milliseconds(100),
+                          std::bind(&VescOmniNode::watchdog_callback, this));
 
-    RCLCPP_INFO(this->get_logger(), "CAN送信ノード（30ms周期）が起動しました");
+    RCLCPP_INFO(
+        get_logger(),
+        "VESC 4輪オムニノード起動 (FL=%d FR=%d RL=%d RR=%d, can1, 30ms)",
+        VESC_ID_FL, VESC_ID_FR, VESC_ID_RL, VESC_ID_RR);
   }
 
-  ~MotorNode() {
-    if (can_socket_ >= 0) close(can_socket_);
-  }
-
- private:
-  void joy_callback(const sensor_msgs::msg::Joy::SharedPtr msg) {
-    float forward = msg->axes[1];
-    float turn = msg->axes[0];
-
-    // 足回りのPWM計算
-    pwm_outputs_[0] = (int16_t)((forward + turn) * 4000);  // 左前
-    pwm_outputs_[1] = (int16_t)((forward - turn) * 4000);  // 右前
-    pwm_outputs_[2] = (int16_t)((forward + turn) * 4000);  // 左後
-    pwm_outputs_[3] = (int16_t)((forward - turn) * 4000);  // 右後
-  }
-
-  void timer_callback() {
-    struct can_frame frame;  // <-- ここを frame と定義
-    frame.can_id = 0x01;
-    frame.can_dlc = 8;
-
-    std::memcpy(frame.data, pwm_outputs_, sizeof(pwm_outputs_));
-
-    // 送信処理（&frame を使用するように修正）
-    if (write(can_socket_, &frame, sizeof(struct can_frame)) < 0) {
-      // エラー理由を具体的に表示するように変更
-      RCLCPP_WARN_THROTTLE(this->get_logger(), *this->get_clock(), 1000,
-                           "CAN送信失敗: %s", std::strerror(errno));
+  ~VescOmniNode() {
+    if (can_socket_ >= 0) {
+      // 停止指令を送信してから閉じる
+      send_vesc_rpm(VESC_ID_FL, 0);
+      send_vesc_rpm(VESC_ID_FR, 0);
+      send_vesc_rpm(VESC_ID_RL, 0);
+      send_vesc_rpm(VESC_ID_RR, 0);
+      close(can_socket_);
     }
   }
 
+ private:
+  // ----------------------------------------------------------
+  // /cmd_vel コールバック: ERPM 値を更新するだけ (送信はタイマー)
+  // ----------------------------------------------------------
+  void cmd_callback(const geometry_msgs::msg::Twist::SharedPtr msg) {
+    last_cmd_time_ = now();
+
+    const double vx = msg->linear.x;   // 前進 [m/s]
+    const double vy = msg->linear.y;   // 左方向 [m/s]
+    const double wz = msg->angular.z;  // 反時計回り [rad/s]
+
+    // 4輪オムニ逆運動学
+    target_erpm_[0] = mps_to_erpm(+vx - vy - wz * ROBOT_RADIUS);  // FL
+    target_erpm_[1] = mps_to_erpm(+vx + vy + wz * ROBOT_RADIUS);  // FR
+    target_erpm_[2] = mps_to_erpm(+vx + vy - wz * ROBOT_RADIUS);  // RL
+    target_erpm_[3] = mps_to_erpm(+vx - vy + wz * ROBOT_RADIUS);  // RR
+
+    RCLCPP_DEBUG(get_logger(),
+                 "vx=%.2f vy=%.2f wz=%.2f → FL:%d FR:%d RL:%d RR:%d", vx, vy,
+                 wz, target_erpm_[0], target_erpm_[1], target_erpm_[2],
+                 target_erpm_[3]);
+  }
+
+  // ----------------------------------------------------------
+  // 30ms 周期送信タイマー: 4輪まとめて CAN 送信
+  // ----------------------------------------------------------
+  void send_timer_callback() {
+    if (can_socket_ < 0) return;
+    send_vesc_rpm(VESC_ID_FL, target_erpm_[0]);
+    send_vesc_rpm(VESC_ID_FR, target_erpm_[1]);
+    send_vesc_rpm(VESC_ID_RL, target_erpm_[2]);
+    send_vesc_rpm(VESC_ID_RR, target_erpm_[3]);
+  }
+
+  // ----------------------------------------------------------
+  // 安全停止ウォッチドッグ
+  // ----------------------------------------------------------
+  void watchdog_callback() {
+    if (can_socket_ < 0) return;
+    auto elapsed = (now() - last_cmd_time_).seconds();
+    if (elapsed > 0.2) {
+      target_erpm_[0] = target_erpm_[1] = target_erpm_[2] = target_erpm_[3] = 0;
+    }
+  }
+
+  // ----------------------------------------------------------
+  // VESC CAN RPM 指令フレーム送信
+  // VESC プロトコル: Extended CAN ID = (CMD << 8) | VESC_ID
+  //                 Data: 4 byte big-endian int32
+  // ----------------------------------------------------------
+  void send_vesc_rpm(uint8_t vesc_id, int32_t rpm) {
+    if (can_socket_ < 0) return;
+
+    struct can_frame frame;
+    frame.can_id = (static_cast<uint32_t>(COMM_SET_RPM) << 8 | vesc_id) |
+                   CAN_EFF_FLAG;  // Extended frame
+    frame.can_dlc = 4;
+    frame.data[0] = static_cast<uint8_t>((rpm >> 24) & 0xFF);
+    frame.data[1] = static_cast<uint8_t>((rpm >> 16) & 0xFF);
+    frame.data[2] = static_cast<uint8_t>((rpm >> 8) & 0xFF);
+    frame.data[3] = static_cast<uint8_t>((rpm >> 0) & 0xFF);
+
+    if (write(can_socket_, &frame, sizeof(struct can_frame)) < 0) {
+      RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 1000,
+                           "CAN 送信失敗 (ID=0x%02X): %s", vesc_id,
+                           std::strerror(errno));
+    }
+  }
+
+  // ----------------------------------------------------------
+  // メンバ変数
+  // ----------------------------------------------------------
   int can_socket_;
   struct sockaddr_can addr_;
   struct ifreq ifr_;
-  int16_t pwm_outputs_[4];
-  rclcpp::Subscription<sensor_msgs::msg::Joy>::SharedPtr joy_sub_;
-  rclcpp::TimerBase::SharedPtr timer_;
+
+  rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr cmd_sub_;
+  rclcpp::TimerBase::SharedPtr send_timer_;
+  rclcpp::TimerBase::SharedPtr watchdog_timer_;
+  rclcpp::Time last_cmd_time_{0, 0, RCL_ROS_TIME};
+  int32_t target_erpm_[4]{0, 0, 0, 0};  // FL, FR, RL, RR
 };
 
 int main(int argc, char** argv) {
   rclcpp::init(argc, argv);
-  rclcpp::spin(std::make_shared<MotorNode>());
+  rclcpp::spin(std::make_shared<VescOmniNode>());
   rclcpp::shutdown();
   return 0;
 }

@@ -1,3 +1,5 @@
+import { ros } from "./rosbridge.js";
+
 window.addEventListener("load", () => {
   // 画面をクリックした時にフルスクリーン＆横固定（ブラウザ制限のため）
   document.body.addEventListener(
@@ -29,6 +31,15 @@ let wasBothPressed = false;
 // 長押し用のタイマー変数
 let repeatTimer = null;
 let lastBtn = null;
+
+// ---- ROSBridge 設定 ----
+const YAW_TOPIC = "/gunner/yaw_vel"; // std_msgs/msg/Float32
+const FIRE_TOPIC = "/gunner/fire"; // std_msgs/msg/Bool
+const YAW_SCALE = 3.0; // 最大旋回速度 [rad/s]
+const STICK_DEAD = 0.08; // スティックのデッドゾーン
+
+let prevFirePressed = false; // 発射エッジ検出用
+let pubFrameCount = 0; // 送信レート制御 (~20 Hz)
 
 function updateModeUI() {
   const container = document.querySelector(".ui-overlay");
@@ -82,6 +93,31 @@ function updateLockUI() {
   }
 }
 
+// ---- YAW インジケーター更新 ----
+function updateYawUI(yaw) {
+  const valEl = document.getElementById("yaw-val");
+  const indEl = document.getElementById("yaw-indicator");
+  const mon = document.getElementById("yaw-monitor");
+  if (!valEl || !indEl) return;
+
+  const active = !state.isAuto;
+  if (mon) mon.classList.toggle("yaw-active", active);
+
+  valEl.textContent = active ? yaw.toFixed(2) : "---";
+
+  // バーを中心から左右に伸ばす
+  const norm = Math.max(-1, Math.min(1, yaw / YAW_SCALE));
+  const pct = Math.abs(norm) * 50;
+  if (norm >= 0) {
+    indEl.style.left = "50%";
+    indEl.style.right = "auto";
+  } else {
+    indEl.style.left = "auto";
+    indEl.style.right = "50%";
+  }
+  indEl.style.width = `${pct}%`;
+}
+
 function adjustValue(dir) {
   if (state.isLocked) return; // ロック中は変更不可
   const key = state.focus === 0 ? "exposure" : "gain";
@@ -123,11 +159,30 @@ function loop() {
   if (fireBtn) {
     if (circle) {
       fireBtn.classList.add("active");
-      // console.log("FIRE!"); // ここに発射信号送信
     } else {
       fireBtn.classList.remove("active");
     }
   }
+
+  // --- 発射信号: 押した瞬間のみ送信 ---
+  if (circle && !prevFirePressed) {
+    ros.publish(FIRE_TOPIC, "std_msgs/msg/Bool", { data: true });
+  }
+  prevFirePressed = circle;
+
+  // --- MANUAL 時: 右スティック X → 砲塔旋回速度 ---
+  const rawYaw = gp.axes[2] ?? 0;
+  const yaw = Math.abs(rawYaw) > STICK_DEAD ? rawYaw * YAW_SCALE : 0.0;
+
+  // 20 Hz でパブリッシュ (requestAnimationFrame は ~60 fps のため 3 フレームに 1 回)
+  if (++pubFrameCount % 3 === 0) {
+    // AUTO → 0 を送り続けて砲塔を停止, MANUAL → 実値を送信
+    ros.publish(YAW_TOPIC, "std_msgs/msg/Float32", {
+      data: state.isAuto ? 0.0 : yaw,
+    });
+  }
+
+  updateYawUI(yaw);
 
   // 十字キー入力判定 (PS4コントローラーのボタンインデックス)
   // 14: Left, 15: Right, 12: Up, 13: Down
@@ -161,7 +216,15 @@ function loop() {
 
 window.addEventListener("gamepadconnected", () => {
   console.log("Gamepad Connected");
+  ros.setStatusEl("ros-gunner-status");
   loop();
+});
+
+window.addEventListener("gamepaddisconnected", () => {
+  // 接続が切れたら砲塔を安全停止
+  ros.publish(YAW_TOPIC, "std_msgs/msg/Float32", { data: 0.0 });
+  prevFirePressed = false;
+  updateYawUI(0);
 });
 
 // ロックボタンのタップでロック解除／施錠

@@ -423,3 +423,157 @@ body {
     box-shadow: 0 0 40px #ff0000;
     transform: scale(1.1);
 }
+
+/* =====================
+   ROS 接続ステータスバッジ
+   ===================== */
+.ros-status {
+    font-family: monospace;
+    font-size: 11px;
+    color: #444;
+    padding: 2px 8px;
+    border: 1px solid #333;
+    border-radius: 3px;
+    letter-spacing: 1px;
+    transition: color 0.4s, border-color 0.4s;
+    white-space: nowrap;
+}
+.ros-status.ros-connected {
+    color: #00cc00;
+    border-color: #00cc00;
+}
+
+/* =====================
+   GUNNER: YAW 速度インジケーター
+   ===================== */
+.yaw-monitor {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    opacity: 0.35;
+    transition: opacity 0.3s;
+}
+.yaw-monitor.yaw-active {
+    opacity: 1;
+}
+.yaw-monitor-label {
+    font-family: monospace;
+    font-size: 10px;
+    letter-spacing: 2px;
+    color: #888;
+}
+.yaw-val {
+    font-family: monospace;
+    font-size: 22px;
+    font-weight: bold;
+    color: #fff;
+    min-width: 60px;
+    text-align: center;
+}
+.yaw-track {
+    width: 100px;
+    height: 8px;
+    background: #0d0d0d;
+    border: 1px solid #333;
+    border-radius: 2px;
+    position: relative;
+    overflow: hidden;
+}
+.yaw-center-line {
+    position: absolute;
+    left: 50%;
+    top: 0;
+    width: 1px;
+    height: 100%;
+    background: #444;
+}
+.yaw-indicator {
+    position: absolute;
+    top: 0;
+    height: 100%;
+    width: 0;
+    background: #ff2222;
+    box-shadow: 0 0 6px #ff2222;
+    transition: width 0.05s;
+}
+
+/* =====================
+   CONTROL: オムニ速度モニター
+   ===================== */
+.omni-monitor {
+    position: absolute;
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 20px);
+    left:   calc(env(safe-area-inset-left,  0px) + 20px);
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+.omni-pad {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    border: 1px solid #2a2a2a;
+    background: #080808;
+    position: relative;
+    flex-shrink: 0;
+}
+.omni-dot {
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: #1a4a1a;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    transition: transform 0.06s, background 0.1s, box-shadow 0.1s;
+}
+.omni-info {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+.omni-vals {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+.omni-val-row {
+    display: flex;
+    gap: 8px;
+    font-family: monospace;
+    font-size: 12px;
+    color: #ccc;
+}
+.omni-key {
+    color: #555;
+    width: 22px;
+}
+/* 旋回バー (WZ) */
+.wz-track {
+    width: 84px;
+    height: 5px;
+    background: #0d0d0d;
+    border: 1px solid #2a2a2a;
+    border-radius: 2px;
+    position: relative;
+    overflow: hidden;
+}
+.wz-center-line {
+    position: absolute;
+    left: 50%;
+    top: 0;
+    width: 1px;
+    height: 100%;
+    background: #333;
+}
+.wz-bar {
+    position: absolute;
+    top: 0;
+    height: 100%;
+    width: 0;
+    background: #ffaa00;
+    box-shadow: 0 0 4px #ffaa00;
+    transition: width 0.05s;
+}

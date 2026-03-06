@@ -19,7 +19,6 @@ add_executable(main_node
   src/base_motor.cpp
 )
 
-# 【重要】すべて main_node に対して設定するように統一します
 target_include_directories(main_node PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include/${PROJECT_NAME}>)
@@ -33,8 +32,23 @@ ament_target_dependencies(main_node
   geometry_msgs
 )
 
+# ============================================================
+# VESC 4輪オムニドライブ ノード
+# ============================================================
+add_executable(motor_node
+  src/motor_node.cpp
+)
+
+target_compile_features(motor_node PUBLIC c_std_99 cxx_std_17)
+
+ament_target_dependencies(motor_node
+  rclcpp
+  geometry_msgs
+)
+
 install(TARGETS
   main_node
+  motor_node
   DESTINATION lib/${PROJECT_NAME}
 )
 

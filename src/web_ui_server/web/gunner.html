@@ -41,9 +41,21 @@
         <div class="sidebar-right">
             <div id="mode-indicator" class="mode-label status-auto">AUTO</div>
 
+            <!-- YAW 速度モニター (手動時に表示) -->
+            <div id="yaw-monitor" class="yaw-monitor">
+                <div class="yaw-monitor-label">YAW vel</div>
+                <div id="yaw-val" class="yaw-val">---</div>
+                <div class="yaw-track">
+                    <div class="yaw-center-line"></div>
+                    <div id="yaw-indicator" class="yaw-indicator"></div>
+                </div>
+            </div>
+
             <div class="button-group">
                 <button id="btn-fire" class="fire-btn">MANUAL FIRE</button>
             </div>
+
+            <div id="ros-gunner-status" class="ros-status">ROS: -</div>
         </div>
     </div>
     <script type="module" src="src/main.js"></script>
