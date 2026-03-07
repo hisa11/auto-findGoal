@@ -52,12 +52,18 @@ UsbCan::~UsbCan() {
 
 bool UsbCan::is_open() const { return can_socket_ >= 0; }
 
+bool UsbCan::recv(struct can_frame& frame) {
+  if (!is_open()) return false;
+  ssize_t nbytes = ::recv(can_socket_, &frame, sizeof(frame), MSG_DONTWAIT);
+  return nbytes == static_cast<ssize_t>(sizeof(frame));
+}
+
 // 受信バッファを非ブロッキングで全て読み捨てる
 void UsbCan::drain() {
   if (!is_open()) return;
   struct can_frame frame;
   // MSG_DONTWAITで受信キューが空になるまで読み続ける
-  while (recv(can_socket_, &frame, sizeof(frame), MSG_DONTWAIT) > 0) {
+  while (::recv(can_socket_, &frame, sizeof(frame), MSG_DONTWAIT) > 0) {
   }
 }
 

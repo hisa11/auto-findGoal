@@ -3,6 +3,7 @@ import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Image
 from geometry_msgs.msg import Point
+from std_msgs.msg import String
 from cv_bridge import CvBridge
 import cv2
 import numpy as np
@@ -25,6 +26,8 @@ class AdvancedYoloGoalDetector(Node):
     self.target_id = self.color_to_id.get(
         self.target_color_name, 1)  # デフォルトはBLUE
     self.rainbow_id = 3
+    import threading
+    self._color_lock = threading.Lock()
 
     self.class_names = {0: "RED", 1: "BLUE", 2: "GREEN", 3: "RAINBOW"}
     self.class_colors = {0: (0, 0, 255), 1: (
@@ -62,6 +65,12 @@ class AdvancedYoloGoalDetector(Node):
         Image, '/camera/camera/aligned_depth_to_color/image_raw', self.depth_callback, 10)
     self.color_sub = self.create_subscription(
         Image, '/camera/camera/color/image_raw', self.color_callback, 10)
+    # Web UI からの追従色指定
+    self.target_color_sub = self.create_subscription(
+        String, '/yolo/target_color', self.target_color_callback, rclpy.qos.QoSProfile(
+            depth=1,
+            durability=rclpy.qos.DurabilityPolicy.VOLATILE,
+            reliability=rclpy.qos.ReliabilityPolicy.BEST_EFFORT))
     self.image_pub = self.create_publisher(
         Image, '/yolo/annotated_image', 10)
     # ゴール位置情報パブリッシャー
@@ -74,6 +83,23 @@ class AdvancedYoloGoalDetector(Node):
           msg, desired_encoding='passthrough')
     except Exception as e:
       self.get_logger().error(f'深度画像エラー: {e}')
+
+  def target_color_callback(self, msg: String):
+    """gunner.html からの追従色指定をリアルタイムに反映"""
+    name = msg.data.strip().upper()
+    new_id = self.color_to_id.get(name)
+    if new_id is None:
+      self.get_logger().warn(
+          f'[YOLO] 不明な色: {msg.data}  (RED/BLUE/GREEN のいずれかを指定)')
+      return
+    with self._color_lock:
+      if new_id != self.target_id:
+        self.target_id = new_id
+        self.target_color_name = name
+        self.history.clear()           # 色変更時は履歴をリセット
+        self.last_best_box = None
+        self.last_final_class = None
+        self.get_logger().info(f'[YOLO] 追従色変更 → {name} (id={new_id}) + RAINBOW')
 
   def decide_final_class(self, hist):
     """過去の履歴から最終的な色を決定する賢いロジック"""

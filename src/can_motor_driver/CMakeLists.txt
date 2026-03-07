@@ -17,6 +17,11 @@ add_executable(main_node
   src/usb_can.cpp
   src/dm_motor.cpp
   src/base_motor.cpp
+  src/c610.cpp
+  src/pid.cpp
+  src/omni_controller.cpp
+  src/c610_controller.cpp
+  src/turret_controller.cpp
 )
 
 target_include_directories(main_node PUBLIC
@@ -47,9 +52,30 @@ ament_target_dependencies(motor_node
   geometry_msgs
 )
 
+# ============================================================
+# C610 ESC 速度制御ノード (ロボットマスターモータ)
+# ============================================================
+add_executable(c610_node
+  src/c610_node.cpp
+  src/c610.cpp
+  src/usb_can.cpp
+)
+
+target_include_directories(c610_node PUBLIC
+  $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+  $<INSTALL_INTERFACE:include/${PROJECT_NAME}>)
+
+target_compile_features(c610_node PUBLIC c_std_99 cxx_std_17)
+
+ament_target_dependencies(c610_node
+  rclcpp
+  std_msgs
+)
+
 install(TARGETS
   main_node
   motor_node
+  c610_node
   DESTINATION lib/${PROJECT_NAME}
 )
 

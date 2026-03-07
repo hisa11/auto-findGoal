@@ -16,16 +16,22 @@ body {
 }
 
 .video-container {
-  height: 100vh; /* 高さ限界まで */
+  flex: 1;           /* サイドバー間の残り幅をすべて使う */
+  height: 100vh;
   display: flex;
   justify-content: center;
   align-items: center;
+  overflow: hidden;  /* はみ出し防止 */
 }
 
 /* 映像とレーザー枠 */
 .laser-frame {
-  height: 100%;    /* 高さを画面いっぱいに */
-  width: auto;     /* アスペクト比を維持（640x480なので4:3になる） */
+  max-width: 100%;   /* コンテナ幅を超えない */
+  max-height: 100vh; /* 画面高を超えない */
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  display: block;
 }
 
 /* AUTO: 緑の枠 */
@@ -500,6 +506,68 @@ body {
     background: #ff2222;
     box-shadow: 0 0 6px #ff2222;
     transition: width 0.05s;
+}
+
+/* =====================
+   GUNNER: カラーセレクター
+   ===================== */
+.color-selector {
+    margin: 8px 0;
+}
+.color-selector-label {
+    color: #888;
+    font-size: 10px;
+    text-align: center;
+    margin-bottom: 4px;
+    letter-spacing: 1px;
+    font-family: monospace;
+}
+.color-btns {
+    display: flex;
+    gap: 4px;
+    justify-content: center;
+}
+.color-btn {
+    flex: 1;
+    padding: 6px 2px;
+    border: 1px solid #444;
+    background: #111;
+    color: #888;
+    font-size: 11px;
+    font-weight: bold;
+    cursor: pointer;
+    border-radius: 3px;
+    transition: background 0.2s, border-color 0.2s, color 0.2s, box-shadow 0.2s;
+}
+.color-btn-red.color-btn-active {
+    background: #3a0000;
+    border-color: #ff2020;
+    color: #ff4040;
+    box-shadow: 0 0 8px #ff2020;
+}
+.color-btn-blue.color-btn-active {
+    background: #00003a;
+    border-color: #2020ff;
+    color: #4040ff;
+    box-shadow: 0 0 8px #2020ff;
+}
+.color-btn-green.color-btn-active {
+    background: #003a00;
+    border-color: #20ff20;
+    color: #40ff40;
+    box-shadow: 0 0 8px #20ff20;
+}
+.color-btn-red:not(.color-btn-active):hover {
+    border-color: #882020;
+    color: #cc4040;
+}
+.color-btn-blue:not(.color-btn-active):hover {
+    border-color: #202088;
+    color: #4040cc;
+}
+.color-btn-green:not(.color-btn-active):hover {
+    border-color: #208820;
+    color: #40cc40;
 }
 
 /* =====================

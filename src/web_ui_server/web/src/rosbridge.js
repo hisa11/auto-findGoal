@@ -160,4 +160,6 @@ export class ROSBridge {
 }
 
 /** ワークスペース全体で共有するシングルトンインスタンス */
-export const ros = new ROSBridge(`ws://${location.hostname}:9090`);
+// https ページから ws:// は Mixed Content でブロックされるため自動切替
+const _WS_PROTO = location.protocol === "https:" ? "wss:" : "ws:";
+export const ros = new ROSBridge(`${_WS_PROTO}//${location.hostname}:9090`);

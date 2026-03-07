@@ -35,8 +35,30 @@ let lastBtn = null;
 // ---- ROSBridge 設定 ----
 const YAW_TOPIC = "/gunner/yaw_vel"; // std_msgs/msg/Float32
 const FIRE_TOPIC = "/gunner/fire"; // std_msgs/msg/Bool
+const COLOR_TOPIC = "/yolo/target_color"; // std_msgs/msg/String
 const YAW_SCALE = 3.0; // 最大旋回速度 [rad/s]
 const STICK_DEAD = 0.08; // スティックのデッドゾーン
+
+// ---- 追従色選択 ----
+let currentTargetColor = "BLUE"; // デフォルト
+
+function setTargetColor(color) {
+  currentTargetColor = color;
+  // ボタンのアクティブ状態を更新
+  document.querySelectorAll(".color-btn").forEach((btn) => {
+    btn.classList.toggle("color-btn-active", btn.dataset.color === color);
+  });
+  // ROS トピックに送信
+  ros.publish(COLOR_TOPIC, "std_msgs/msg/String", { data: color });
+  console.log("[YOLO] target_color →", color);
+}
+
+document.querySelectorAll(".color-btn").forEach((btn) => {
+  btn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    setTargetColor(btn.dataset.color);
+  });
+});
 
 let prevFirePressed = false; // 発射エッジ検出用
 let pubFrameCount = 0; // 送信レート制御 (~20 Hz)
@@ -233,3 +255,21 @@ document.getElementById("btn-lock")?.addEventListener("click", (e) => {
   state.isLocked = !state.isLocked;
   updateLockUI();
 });
+
+// ============================================================
+// RealSense カメラ映像表示
+//   /camera/camera/color/image_raw/compressed をサブスクライブし
+//   #main-frame の src を base64 JPEG で更新する
+// ============================================================
+(function setupCamera() {
+  const imgEl = document.getElementById("main-frame");
+  if (!imgEl) return;
+
+  const CAMERA_TOPIC = "/camera/camera/color/image_raw/compressed";
+
+  ros.subscribe(CAMERA_TOPIC, "sensor_msgs/msg/CompressedImage", (msg) => {
+    // msg.data は base64 エンコードされた JPEG バイト列
+    imgEl.src = "data:image/jpeg;base64," + msg.data;
+  });
+})();
+

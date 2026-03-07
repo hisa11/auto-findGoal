@@ -11,6 +11,12 @@ const MAX_LINEAR = 1.0; // 最大直動速度 [m/s]
 const MAX_ANGULAR = 2.0; // 最大旋回速度 [rad/s]
 const STICK_DEAD = 0.08; // デッドゾーン
 
+// ---- C610 モータートピック ----
+const C610_RPM_TOPIC = "/c610/target_rpm";
+const C610_RPM_TYPE = "std_msgs/msg/Int32";
+const C610_RPM_HI = 2000; // △ ボタン時の目標 RPM
+const C610_RPM_STOP = 0; // × ボタン時の目標 RPM (停止)
+
 // 速度倍率マップ
 const SPEED_MULT = { high: 1.0, mid: 0.6, low: 0.3 };
 
@@ -78,6 +84,10 @@ function updateOmniDisplay(vx, vy, wz) {
 // 十字キーの前フレーム状態（エッジ検出用）
 let prevUp = false;
 let prevDown = false;
+
+// PS4 フェイスボタンの前フレーム状態
+let prevTriangle = false; // button[3]
+let prevCross = false; // button[0]
 
 function setSpeed(index) {
   speedIndex = Math.max(0, Math.min(SPEED_ORDER.length - 1, index));
@@ -150,6 +160,22 @@ function updateLoop() {
 
   prevUp = up;
   prevDown = down;
+
+  // --- △ (button[3]): C610 全モーター 8000 RPM ---
+  const triangle = gp.buttons[3].pressed;
+  if (triangle && !prevTriangle) {
+    ros.publish(C610_RPM_TOPIC, C610_RPM_TYPE, { data: C610_RPM_HI });
+    console.log("[C610] △ pressed → target_rpm =", C610_RPM_HI);
+  }
+  prevTriangle = triangle;
+
+  // --- × (button[0]): C610 全モーター停止 ---
+  const cross = gp.buttons[0].pressed;
+  if (cross && !prevCross) {
+    ros.publish(C610_RPM_TOPIC, C610_RPM_TYPE, { data: C610_RPM_STOP });
+    console.log("[C610] × pressed → target_rpm =", C610_RPM_STOP);
+  }
+  prevCross = cross;
 
   requestAnimationFrame(updateLoop);
 }
