@@ -272,4 +272,3 @@ document.getElementById("btn-lock")?.addEventListener("click", (e) => {
     imgEl.src = "data:image/jpeg;base64," + msg.data;
   });
 })();
-
