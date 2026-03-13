@@ -59,7 +59,7 @@ def _make_handler(directory: str, logger):
 
 class _ReusePortHTTPServer(HTTPServer):
   """SO_REUSEADDR + SO_REUSEPORT を有効にしたHTTPServer。
-  
+
   前回の起動プロセスが残留していてもポートを強制的に再利用できる。
   """
   allow_reuse_address = True
