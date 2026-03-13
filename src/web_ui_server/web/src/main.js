@@ -268,7 +268,23 @@ document.getElementById("btn-lock")?.addEventListener("click", (e) => {
   const CAMERA_TOPIC = "/camera/camera/color/image_raw/compressed";
 
   ros.subscribe(CAMERA_TOPIC, "sensor_msgs/msg/CompressedImage", (msg) => {
-    // msg.data は base64 エンコードされた JPEG バイト列
-    imgEl.src = "data:image/jpeg;base64," + msg.data;
+    // rosbridge のバージョンによって msg.data の形式が異なる:
+    //   旧バージョン: base64 文字列
+    //   新バージョン: 整数配列 (uint8[])
+    // 両方に対応する
+    let b64;
+    if (typeof msg.data === 'string') {
+      b64 = msg.data;
+    } else {
+      // Array<number> または Uint8Array → base64 に変換
+      const bytes = msg.data instanceof Uint8Array ? msg.data : new Uint8Array(msg.data);
+      let binary = '';
+      const chunk = 8192;
+      for (let i = 0; i < bytes.length; i += chunk) {
+        binary += String.fromCharCode(...bytes.subarray(i, i + chunk));
+      }
+      b64 = btoa(binary);
+    }
+    imgEl.src = "data:image/jpeg;base64," + b64;
   });
 })();

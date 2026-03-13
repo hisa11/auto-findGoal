@@ -10,22 +10,27 @@
 #include <cstdio>
 #include <cstring>
 
-UsbCan::UsbCan(const std::string& ifname) : can_socket_(-1) {
+UsbCan::UsbCan(const std::string& ifname) : ifname_(ifname), can_socket_(-1) {
+  try_open();
+}
+
+bool UsbCan::try_open() {
+  if (can_socket_ >= 0) return true;  // すでに開いている
   int temp_socket;
   // 1. ソケットの作成
   if ((temp_socket = socket(PF_CAN, SOCK_RAW, CAN_RAW)) < 0) {
     fprintf(stderr, "[UsbCan] socket() failed: %s\n", strerror(errno));
-    return;
+    return false;
   }
 
   // 2. インターフェースの検索 (can0など)
   struct ifreq ifr;
-  std::strcpy(ifr.ifr_name, ifname.c_str());
+  std::strcpy(ifr.ifr_name, ifname_.c_str());
   if (ioctl(temp_socket, SIOCGIFINDEX, &ifr) < 0) {
     fprintf(stderr, "[UsbCan] ioctl(SIOCGIFINDEX) failed for '%s': %s\n",
-            ifname.c_str(), strerror(errno));
+            ifname_.c_str(), strerror(errno));
     close(temp_socket);  // ★失敗したら確実に閉じる
-    return;
+    return false;
   }
 
   // 3. バインド (接続)
@@ -33,17 +38,18 @@ UsbCan::UsbCan(const std::string& ifname) : can_socket_(-1) {
   addr.can_family = AF_CAN;
   addr.can_ifindex = ifr.ifr_ifindex;
   if (bind(temp_socket, (struct sockaddr*)&addr, sizeof(addr)) < 0) {
-    fprintf(stderr, "[UsbCan] bind() failed for '%s': %s\n", ifname.c_str(),
+    fprintf(stderr, "[UsbCan] bind() failed for '%s': %s\n", ifname_.c_str(),
             strerror(errno));
     close(temp_socket);  // ★失敗したら確実に閉じる
-    return;
+    return false;
   }
 
   fprintf(stderr, "[UsbCan] opened '%s' (socket=%d, ifindex=%d)\n",
-          ifname.c_str(), temp_socket, ifr.ifr_ifindex);
+          ifname_.c_str(), temp_socket, ifr.ifr_ifindex);
 
   // ★すべて成功した時だけ、メンバ変数に有効なソケットを代入する
   can_socket_ = temp_socket;
+  return true;
 }
 
 UsbCan::~UsbCan() {

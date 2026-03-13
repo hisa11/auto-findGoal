@@ -11,10 +11,10 @@
 // チューニング定数
 // ============================================================
 namespace omni_param {
-static constexpr uint8_t ID_FL = 1;
-static constexpr uint8_t ID_FR = 2;
-static constexpr uint8_t ID_RL = 3;
-static constexpr uint8_t ID_RR = 4;
+static constexpr uint8_t ID_FL = 12;
+static constexpr uint8_t ID_FR = 13;
+static constexpr uint8_t ID_RL = 10;
+static constexpr uint8_t ID_RR = 11;
 static constexpr double ROBOT_RADIUS = 0.15;  // 旋回半径 [m]
 static constexpr double MAX_SPEED_MPS = 1.5;  // 最大直動速度 [m/s]
 static constexpr int32_t MAX_ERPM = 30000;    // 最大 ERPM

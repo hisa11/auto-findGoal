@@ -10,6 +10,7 @@ LAN内制御用WebアプリをHTTPS配信するROS2ノード。
 """
 
 import os
+import socket
 import ssl
 import threading
 from http.server import SimpleHTTPRequestHandler, HTTPServer
@@ -56,6 +57,21 @@ def _make_handler(directory: str, logger):
   return BoundHandler
 
 
+class _ReusePortHTTPServer(HTTPServer):
+  """SO_REUSEADDR + SO_REUSEPORT を有効にしたHTTPServer。
+  
+  前回の起動プロセスが残留していてもポートを強制的に再利用できる。
+  """
+  allow_reuse_address = True
+
+  def server_bind(self):
+    try:
+      self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+    except (AttributeError, OSError):
+      pass  # SO_REUSEPORT 非対応カーネルでも続行
+    super().server_bind()
+
+
 class WebUIServerNode(Node):
   """pixel-landscape-appのWebファイルをHTTPSで配信するノード。"""
 
@@ -69,9 +85,9 @@ class WebUIServerNode(Node):
     self.declare_parameter('port', 443)
     self.declare_parameter('web_dir', os.path.join(pkg_share, 'web'))
     self.declare_parameter('cert_file', os.path.join(
-        pkg_share, 'certs', '192.168.2.8+2.pem'))
+        pkg_share, 'certs', '192.168.2.200+2.pem'))
     self.declare_parameter('key_file', os.path.join(
-        pkg_share, 'certs', '192.168.2.8+2-key.pem'))
+        pkg_share, 'certs', '192.168.2.200+2-key.pem'))
     self.declare_parameter('use_https', True)
 
     host = self.get_parameter('host').value
@@ -89,7 +105,7 @@ class WebUIServerNode(Node):
 
     # ---- HTTPサーバー作成 ----
     # portが443の場合は root権限が必要なため、必要に応じて8443に変更してください
-    self._server = HTTPServer((host, port), handler)
+    self._server = _ReusePortHTTPServer((host, port), handler)
 
     if use_https:
       if not os.path.isfile(cert_file) or not os.path.isfile(key_file):

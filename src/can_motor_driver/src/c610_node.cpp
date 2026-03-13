@@ -2,13 +2,13 @@
 /// ロボットマスターモータ (C610 ESC) 制御ノード
 ///
 /// トピック:
-///   sub  /c610/target_rpm  std_msgs/msg/Int32   全モーター目標 RPM
+///   sub  /c610/motorN/target_rpm  std_msgs/msg/Int32   モーターごとの目標 RPM (N=1..7)
 ///   pub  /can_status/can0  std_msgs/msg/Bool    CAN 送信成否
 ///
 /// PS4 コントローラー:
 ///   △ (triangle) → 8000 RPM で全モーター回転
 ///   × (cross)    → 0 RPM (停止)
-/// を gamepad.js 側が /c610/target_rpm に送信し、このノードが受け取る。
+/// を gamepad.js 側が /c610/motorN/target_rpm に送信し、このノードが受け取る。
 
 #include <algorithm>
 #include <array>
@@ -16,6 +16,8 @@
 #include <rclcpp/rclcpp.hpp>
 #include <std_msgs/msg/bool.hpp>
 #include <std_msgs/msg/int32.hpp>
+#include <string>
+#include <vector>
 
 #include "can_motor_driver/c610.hpp"
 #include "can_motor_driver/usb_can.hpp"
@@ -23,7 +25,7 @@
 // ============================================================
 // チューニング用定数
 // ============================================================
-static constexpr int NUM_MOTORS = 4;   // 接続モーター数
+static constexpr int NUM_MOTORS = 7;   // 接続モーター数 (1〜7)
 static constexpr int CONTROL_MS = 30;  // 制御ループ周期 [ms]
 static constexpr double CONTROL_HZ = 1000.0 / CONTROL_MS;  // ≈ 33.3 Hz
 static constexpr int TARGET_RPM_DEF = 0;                   // 起動時目標 RPM
@@ -63,7 +65,10 @@ struct Pid {
 // ============================================================
 class C610Node : public rclcpp::Node {
  public:
-  C610Node() : Node("c610_node"), target_rpm_(TARGET_RPM_DEF) {
+  C610Node() : Node("c610_node") {
+    // target_rpms_ 初期化
+    target_rpms_.fill(TARGET_RPM_DEF);
+
     // CAN バス初期化
     can_bus_ = std::make_shared<UsbCan>("can0");
     if (!can_bus_->is_open()) {
@@ -83,18 +88,23 @@ class C610Node : public rclcpp::Node {
     }
 
     // ---- ROS トピック ----
-    // 目標 RPM の受信
-    target_sub_ = create_subscription<std_msgs::msg::Int32>(
-        "/c610/target_rpm", rclcpp::QoS(1),
-        [this](const std_msgs::msg::Int32::SharedPtr msg) {
-          target_rpm_ = msg->data;
-          // 目標変更時は積分をリセット（過渡応答改善）
-          if (target_rpm_ == 0) {
-            for (auto& pid : pids_) pid.reset();
-            c610_->stop();
-          }
-          RCLCPP_INFO(get_logger(), "[C610] 目標 RPM → %d", target_rpm_);
-        });
+    // モーターごとの目標 RPM を受信 (/c610/motor1/target_rpm ～ /c610/motor7/target_rpm)
+    for (int id = 1; id <= NUM_MOTORS; ++id) {
+      std::string topic = "/c610/motor" + std::to_string(id) + "/target_rpm";
+      auto sub = create_subscription<std_msgs::msg::Int32>(
+          topic, rclcpp::QoS(1),
+          [this, id](const std_msgs::msg::Int32::SharedPtr msg) {
+            target_rpms_[id - 1] = msg->data;
+            // 目標が 0 になったとき、そのモーターの PID をリセット
+            if (target_rpms_[id - 1] == 0) {
+              pids_[id - 1].reset();
+            }
+            RCLCPP_INFO(get_logger(), "[C610] モーター %d 目標 RPM → %d", id,
+                        target_rpms_[id - 1]);
+          });
+      target_subs_.push_back(sub);
+      RCLCPP_INFO(get_logger(), "[C610] サブスクライブ: %s", topic.c_str());
+    }
 
     // CAN ステータスのパブリッシャー
     can_status_pub_ = create_publisher<std_msgs::msg::Bool>("/can_status/can0",
@@ -129,7 +139,7 @@ class C610Node : public rclcpp::Node {
     // PID → 電流指令
     for (int i = 1; i <= NUM_MOTORS; ++i) {
       int16_t power =
-          pids_[i - 1].compute(static_cast<double>(target_rpm_),
+          pids_[i - 1].compute(static_cast<double>(target_rpms_[i - 1]),
                                static_cast<double>(c610_->get_rpm(i)), dt);
       c610_->set_power(i, power);
     }
@@ -149,10 +159,10 @@ class C610Node : public rclcpp::Node {
   std::shared_ptr<UsbCan> can_bus_;
   std::shared_ptr<C610> c610_;
   std::array<Pid, NUM_MOTORS> pids_;
-  int target_rpm_;
+  std::array<int, NUM_MOTORS> target_rpms_{};
   rclcpp::Time last_time_;
 
-  rclcpp::Subscription<std_msgs::msg::Int32>::SharedPtr target_sub_;
+  std::vector<rclcpp::Subscription<std_msgs::msg::Int32>::SharedPtr> target_subs_;
   rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr can_status_pub_;
   rclcpp::TimerBase::SharedPtr timer_;
 };

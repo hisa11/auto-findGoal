@@ -20,8 +20,10 @@ static constexpr float PITCH_MAX_VEL = 2.0f;      // pitch 最大速 [rad/s]
 static constexpr float GEAR_RATIO = 15.56f;       // ギア比
 static constexpr float IMAGE_WIDTH = 640.0f;
 static constexpr float IMAGE_CENTER_X = IMAGE_WIDTH / 2.0f;
-static constexpr float YAW_KP = 0.02f;           // yaw 比例ゲイン
-static constexpr float YAW_MAX_VEL = 3.0f;       // [rad/s]
+static constexpr float YAW_KP = 0.04f;           // yaw 比例ゲイン
+static constexpr float YAW_MAX_VEL = 6.0f;       // [rad/s]
+static constexpr float YAW_MIN_DEG = -90.0f;     // yaw 下限 [deg]
+static constexpr float YAW_MAX_DEG =  90.0f;     // yaw 上限 [deg]
 static constexpr float TOLERANCE_RATIO = 0.10f;  // デッドバンド比
 static constexpr double GOAL_TIMEOUT_S = 0.5;    // ゴール消失タイムアウト [s]
 // 起動シーケンス: 各カウントで何を行うか (main_node 側で参照)
@@ -70,6 +72,7 @@ class TurretController {
   /// DM モータ不使用時に起動シーケンスを即完了させる
   void skip_startup() { startup_count_ = turret_param::CNT_STARTUP_DONE; }
   float get_yaw_velocity() const;
+  float get_yaw_angle_deg() const;  // 現在 yaw 角 [deg]
   float get_pitch_rad() const;  // ギア比込み [rad]
   float get_pitch_max_vel() const { return turret_param::PITCH_MAX_VEL; }
 
@@ -77,6 +80,8 @@ class TurretController {
   int startup_count_{0};
   mutable std::mutex mtx_;
   float yaw_vel_{0.0f};
+  float yaw_angle_deg_{0.0f};  // 積分済み yaw 角 [deg]
+  int64_t last_step_ns_{0};    // step() 直前の時刻
   bool goal_detected_{false};
   int64_t last_goal_ns_{0};
 };

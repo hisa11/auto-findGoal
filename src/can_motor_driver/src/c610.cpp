@@ -24,31 +24,24 @@ bool C610::send_message() {
     buf[i * 2 + 1] = static_cast<uint8_t>(send_power_[i] & 0xFF);
   }
 
-  bool success = true;
-
   // motor 1-4 → ID 0x200
-  {
-    struct can_frame frame{};
-    frame.can_id = 0x200;
-    frame.can_dlc = 8;
-    std::memcpy(frame.data, buf, 8);
-    if (!can_bus_->send(frame)) {
-      success = false;
-    }
-  }
+  struct can_frame frame200{};
+  frame200.can_id = 0x200;
+  frame200.can_dlc = 8;
+  std::memcpy(frame200.data, buf, 8);
+  bool ok200 = can_bus_->send(frame200);
 
   // motor 5-8 → ID 0x1FF
-  {
-    struct can_frame frame{};
-    frame.can_id = 0x1FF;
-    frame.can_dlc = 8;
-    std::memcpy(frame.data, buf + 8, 8);
-    if (!can_bus_->send(frame)) {
-      success = false;
-    }
-  }
+  struct can_frame frame1ff{};
+  frame1ff.can_id = 0x1FF;
+  frame1ff.can_dlc = 8;
+  std::memcpy(frame1ff.data, buf + 8, 8);
+  bool ok1ff = can_bus_->send(frame1ff);
 
-  return success;
+  last_ok_200_ = ok200;
+  last_ok_1ff_ = ok1ff;
+
+  return ok200 && ok1ff;
 }
 
 // ============================================================

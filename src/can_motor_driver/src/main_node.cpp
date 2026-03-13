@@ -22,6 +22,7 @@
 #include <rclcpp/rclcpp.hpp>
 #include <std_msgs/msg/bool.hpp>
 #include <std_msgs/msg/int32.hpp>
+#include <vector>
 
 // ---- CAN ドライバ / フレーム生成ライブラリ ----
 #include "can_motor_driver/c610.hpp"
@@ -65,7 +66,7 @@ class MainControllerNode : public rclcpp::Node {
     can1_ = std::make_shared<UsbCan>("can1");
     if (!can0_->is_open()) RCLCPP_ERROR(get_logger(), "CAN(can0) を開けません");
     if (!can1_->is_open())
-      RCLCPP_WARN(get_logger(), "CAN(can1) 未接続 — VESC スキップ");
+      RCLCPP_WARN(get_logger(), "CAN(can1) 未接続 — 500ms ごとに再接続を試みます");
 
     // ----------------------------------------------------------
     // フレーム生成ライブラリ初期化
@@ -103,6 +104,18 @@ class MainControllerNode : public rclcpp::Node {
         {/*kp*/ 0.6, /*ki*/ 0.0, /*kd*/ 0.0,
          /*out_min*/ -c610_param::MAX_POWER, /*out_max*/ c610_param::MAX_POWER,
          PID::Mode::VELOCITY},
+        // motor 5 (ID=5)
+        {/*kp*/ 1.8, /*ki*/ 1.3, /*kd*/ 0.0,
+         /*out_min*/ -c610_param::MAX_POWER, /*out_max*/ c610_param::MAX_POWER,
+         PID::Mode::VELOCITY},
+        // motor 6 (ID=6)
+        {/*kp*/ 1.7, /*ki*/ 1.3, /*kd*/ 0.0,
+         /*out_min*/ -c610_param::MAX_POWER, /*out_max*/ c610_param::MAX_POWER,
+         PID::Mode::VELOCITY},
+        // motor 7 (ID=7)
+        {/*kp*/ 0.9, /*ki*/ 0.6, /*kd*/ 0.0,
+         /*out_min*/ -c610_param::MAX_POWER, /*out_max*/ c610_param::MAX_POWER,
+         PID::Mode::VELOCITY},
     }};
     c610_ctrl_ = std::make_shared<C610Controller>(c610_params);
     turret_ctrl_ = std::make_shared<TurretController>();
@@ -131,14 +144,21 @@ class MainControllerNode : public rclcpp::Node {
         },
         sub_opt);
 
-    c610_target_sub_ = create_subscription<std_msgs::msg::Int32>(
-        "/c610/target_rpm", rclcpp::QoS(1),
-        [this](const std_msgs::msg::Int32::SharedPtr msg) {
-          c610_ctrl_->set_target_rpm(msg->data);
-          if (msg->data == 0) c610_drv_->stop();
-          RCLCPP_INFO(get_logger(), "[C610] 目標 RPM → %d", msg->data);
-        },
-        sub_opt);
+    // モーターごとの目標 RPM トピックを購読 (/c610/motor1 ～ /c610/motor7)
+    // rosbridge は Best Effort でパブリッシュするため QoS を合わせる
+    auto c610_qos = rclcpp::QoS(rclcpp::KeepLast(10)).best_effort();
+    for (int id = 1; id <= c610_param::NUM_MOTORS; ++id) {
+      std::string topic = "/c610/motor" + std::to_string(id) + "/target_rpm";
+      auto sub = create_subscription<std_msgs::msg::Int32>(
+          topic, c610_qos,
+          [this, id](const std_msgs::msg::Int32::SharedPtr msg) {
+            c610_ctrl_->set_target_rpm(id - 1, msg->data);
+            RCLCPP_DEBUG(get_logger(), "[C610] モーター %d 目標 RPM → %d", id,
+                        msg->data);
+          },
+          sub_opt);
+      c610_target_subs_.push_back(sub);
+    }
 
     cmd_vel_sub_ = create_subscription<geometry_msgs::msg::Twist>(
         "/cmd_vel", 10,
@@ -270,6 +290,20 @@ class MainControllerNode : public rclcpp::Node {
     for (int i = 0; i < c610_param::NUM_MOTORS; ++i) {
       c610_drv_->set_power(i + 1, c610_ctrl_->get_power(i));
     }
+    // 診断ログ: 約1秒ごとに全軸のtarget/power/actual_rpmを出力
+    if (++diag_count_ % 33 == 0) {
+      RCLCPP_INFO(get_logger(),
+                  "[C610 CAN] 0x200(motor1-4):%s  0x1FF(motor5-8):%s",
+                  c610_drv_->get_last_ok_200() ? "OK" : "FAIL",
+                  c610_drv_->get_last_ok_1ff() ? "OK" : "FAIL");
+      for (int i = 0; i < c610_param::NUM_MOTORS; ++i) {
+        RCLCPP_INFO(get_logger(),
+                    "[C610 diag] motor%d  target=%d  power=%d  actual_rpm=%d",
+                    i + 1, c610_ctrl_->get_target_rpm(i),
+                    c610_ctrl_->get_power(i),
+                    static_cast<int>(c610_drv_->get_rpm(i + 1)));
+      }
+    }
     // ※ stop() は呼ばない — target=0 時も PID が能動ブレーキを担当
   }
 
@@ -315,14 +349,30 @@ class MainControllerNode : public rclcpp::Node {
   }
 
   // ==========================================================
-  // CAN ステータスパブリッシュ (500ms タイマー)
+  // CAN ステータスパブリッシュ + can1 自動再接続 (500ms タイマー)
   // ==========================================================
   void publish_status() {
+    // can1 が未オープンなら再接続を試みる
+    if (!can1_->is_open()) {
+      if (can1_->try_open()) {
+        RCLCPP_INFO(get_logger(), "CAN(can1) 再接続成功 — VESC 有効化");
+      }
+    }
+
     std_msgs::msg::Bool m;
     m.data = can0_->is_open() && can0_send_ok_.load();
     can0_status_pub_->publish(m);
     m.data = can1_->is_open() && can1_send_ok_.load();
     can1_status_pub_->publish(m);
+
+    // VESC 診断ログ (can1 が開いている時のみ)
+    if (can1_->is_open()) {
+      const char* wheels[4] = {"FL", "FR", "RL", "RR"};
+      for (int i = 0; i < 4; ++i) {
+        RCLCPP_DEBUG(get_logger(), "[VESC diag] %s  erpm=%d",
+                     wheels[i], omni_ctrl_->get_erpm(i));
+      }
+    }
   }
 
   // ==========================================================
@@ -355,12 +405,15 @@ class MainControllerNode : public rclcpp::Node {
 
   // サブスクライバー
   rclcpp::Subscription<geometry_msgs::msg::Point>::SharedPtr goal_sub_;
-  rclcpp::Subscription<std_msgs::msg::Int32>::SharedPtr c610_target_sub_;
+  std::vector<rclcpp::Subscription<std_msgs::msg::Int32>::SharedPtr> c610_target_subs_;
   rclcpp::Subscription<geometry_msgs::msg::Twist>::SharedPtr cmd_vel_sub_;
 
   // パブリッシャー
   rclcpp::Publisher<std_msgs::msg::Bool>::SharedPtr can0_status_pub_,
       can1_status_pub_;
+
+  // 診断カウンター
+  int diag_count_{0};
 
   // タイマー
   rclcpp::TimerBase::SharedPtr control_timer_, status_timer_;

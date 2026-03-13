@@ -11,16 +11,41 @@ const MAX_LINEAR = 1.0; // 最大直動速度 [m/s]
 const MAX_ANGULAR = 2.0; // 最大旋回速度 [rad/s]
 const STICK_DEAD = 0.08; // デッドゾーン
 
-// ---- C610 モータートピック ----
-const C610_RPM_TOPIC = "/c610/target_rpm";
+// ---- C610 モータートピック (モーターごとに異なるトピック) ----
 const C610_RPM_TYPE = "std_msgs/msg/Int32";
-const C610_RPM_HI = 2000; // △ ボタン時の目標 RPM
-const C610_RPM_STOP = 0; // × ボタン時の目標 RPM (停止)
+const C610_TOPICS = {
+  1: "/c610/motor1/target_rpm",
+  2: "/c610/motor2/target_rpm",
+  3: "/c610/motor3/target_rpm",
+  4: "/c610/motor4/target_rpm",
+  5: "/c610/motor5/target_rpm",
+  6: "/c610/motor6/target_rpm",
+  7: "/c610/motor7/target_rpm"
+};
+
+// モーター別の目標RPM管理
+const motorTargets = {
+  1: 0, 2: 0, 3: 0, 4: 0, 5: 0, 6: 0, 7: 0
+};
+// 前回パブリッシュした値（変化時のみ送信するため）
+const motorLastSent = {
+  1: null, 2: null, 3: null, 4: null, 5: null, 6: null, 7: null
+};
 
 // 速度倍率マップ
 const SPEED_MULT = { high: 1.0, mid: 0.6, low: 0.3 };
 
 let pubFrameCount = 0; // ~20 Hz 送信用
+
+// PS4ボタン前フレーム状態
+let prevCircle = false; // button[1]
+let prevSquare = false; // button[2]
+let prevTriangle = false; // button[3]
+let prevCross = false; // button[0]
+let prevDpadRight = false; // button[15]
+let prevDpadLeft = false;  // button[14]
+let prevDpadUp = false;   // button[12]
+let prevDpadDown = false; // button[13]
 
 function applyDead(v) {
   return Math.abs(v) > STICK_DEAD ? v : 0.0;
@@ -85,9 +110,28 @@ function updateOmniDisplay(vx, vy, wz) {
 let prevUp = false;
 let prevDown = false;
 
-// PS4 フェイスボタンの前フレーム状態
-let prevTriangle = false; // button[3]
-let prevCross = false; // button[0]
+// モーター更新関数: 指定したモーターのRPMを送信（値が変化した時のみ）
+function publishMotorRPM(motorId, rpm) {
+  motorTargets[motorId] = rpm;
+  if (motorLastSent[motorId] === rpm) return; // 変化なし → スキップ
+  motorLastSent[motorId] = rpm;
+  const topic = C610_TOPICS[motorId];
+  if (topic) {
+    ros.publish(topic, C610_RPM_TYPE, { data: rpm });
+    console.log(`[Motor ${motorId}] RPM = ${rpm}`);
+  }
+}
+
+// ID1,2,3,4から目標値が0以外のものがあるか判定
+function hasMotorTarget() {
+  return [1, 2, 3, 4].some(id => motorTargets[id] !== 0);
+}
+
+// ID7を制御: ID1-4がいずれか0でなければ-1000、全て0なら0
+function updateMotor7() {
+  const target7 = hasMotorTarget() ? 4000 : 0;
+  publishMotorRPM(7, target7);
+}
 
 function setSpeed(index) {
   speedIndex = Math.max(0, Math.min(SPEED_ORDER.length - 1, index));
@@ -114,6 +158,10 @@ window.addEventListener("gamepaddisconnected", () => {
     angular: { x: 0.0, y: 0.0, z: 0.0 },
   });
   updateOmniDisplay(0, 0, 0);
+  // 全モーター停止
+  for (let i = 1; i <= 7; i++) {
+    motorTargets[i] = 0;
+  }
 });
 
 function updateLoop() {
@@ -122,11 +170,11 @@ function updateLoop() {
 
   const gp = gamepads[0];
 
-  // --- Circleボタン (button[1]) で発射ボタンをアクティブに ---
-  const circle = gp.buttons[1].pressed;
+  // --- PSボタン (button[16]) で発射ボタンをアクティブに ---
+  const psButton = gp.buttons[16]?.pressed || false;
   const fireBtn = document.getElementById("btn-fire-ctrl");
   if (fireBtn) {
-    if (circle) {
+    if (psButton) {
       fireBtn.classList.add("active");
     } else {
       fireBtn.classList.remove("active");
@@ -150,32 +198,90 @@ function updateLoop() {
 
   updateOmniDisplay(vx, vy, wz);
 
-  // --- 十字キー上下で速度切替（エッジ検出: 押した瞬間のみ）---
-  // 12: Up, 13: Down
-  const up = gp.buttons[12].pressed;
-  const down = gp.buttons[13].pressed;
+  // ---- C610 モーター制御 ----
+  
+  // --- Circleボタン (button[1]): ID1,2 を -10000rpm ---
+  const circle = gp.buttons[1]?.pressed || false;
+  if (circle && !prevCircle) {
+    publishMotorRPM(1, -10000);
+    publishMotorRPM(2, -10000);
+  }
+  prevCircle = circle;
 
-  if (up && !prevUp) setSpeed(speedIndex - 1); // 上 → 高速方向
-  if (down && !prevDown) setSpeed(speedIndex + 1); // 下 → 低速方向
+  // --- Squareボタン (button[2]): ID1,2 を 0rpm ---
+  const square = gp.buttons[2]?.pressed || false;
+  if (square && !prevSquare) {
+    publishMotorRPM(1, 0);
+    publishMotorRPM(2, 0);
+  }
+  prevSquare = square;
 
-  prevUp = up;
-  prevDown = down;
+  // --- 十字キー右 (button[15]): ID3 -10000, ID4 10000 ---
+  const dpadRight = gp.buttons[15]?.pressed || false;
+  if (dpadRight && !prevDpadRight) {
+    publishMotorRPM(3, -10000);
+    publishMotorRPM(4, 10000);
+  }
+  prevDpadRight = dpadRight;
 
-  // --- △ (button[3]): C610 全モーター 8000 RPM ---
-  const triangle = gp.buttons[3].pressed;
+  // --- 十字キー左 (button[14]): ID3,4 を 0rpm ---
+  const dpadLeft = gp.buttons[14]?.pressed || false;
+  if (dpadLeft && !prevDpadLeft) {
+    publishMotorRPM(3, 0);
+    publishMotorRPM(4, 0);
+    console.log("[DPad Left] pressed → ID3,4 = 0");
+  }
+  prevDpadLeft = dpadLeft;
+
+  // --- 三角ボタン (button[3]): ID5 2000rpm ---
+  const triangle = gp.buttons[3]?.pressed || false;
   if (triangle && !prevTriangle) {
-    ros.publish(C610_RPM_TOPIC, C610_RPM_TYPE, { data: C610_RPM_HI });
-    console.log("[C610] △ pressed → target_rpm =", C610_RPM_HI);
+    publishMotorRPM(5, 3000);
+    console.log("[Triangle] pressed → ID5 = 2000");
   }
-  prevTriangle = triangle;
 
-  // --- × (button[0]): C610 全モーター停止 ---
-  const cross = gp.buttons[0].pressed;
+  // --- バツボタン (button[0]): ID5 -2000rpm ---
+  const cross = gp.buttons[0]?.pressed || false;
   if (cross && !prevCross) {
-    ros.publish(C610_RPM_TOPIC, C610_RPM_TYPE, { data: C610_RPM_STOP });
-    console.log("[C610] × pressed → target_rpm =", C610_RPM_STOP);
+    publishMotorRPM(5, -2000);
+    console.log("[Cross] pressed → ID5 = -2000");
   }
+
+  // --- 三角またはバツボタンを離すと ID5 = 0rpm ---
+  if (!triangle && !cross && (prevTriangle || prevCross)) {
+    publishMotorRPM(5, 0);
+    console.log("[Triangle/Cross] released → ID5 = 0");
+  }
+
+  prevTriangle = triangle;
   prevCross = cross;
+
+  // --- 十字キー上 (button[12]): ID6 3000rpm ---
+  const dpadUp = gp.buttons[12]?.pressed || false;
+  if (dpadUp && !prevDpadUp) {
+    publishMotorRPM(6, 3000);
+    console.log("[DPad Up] pressed → ID6 = 3000");
+  }
+
+  // --- 十字キー下 (button[13]): ID6 -3000rpm ---
+  const dpadDown = gp.buttons[13]?.pressed || false;
+  if (dpadDown && !prevDpadDown) {
+    publishMotorRPM(6, -3000);
+    console.log("[DPad Down] pressed → ID6 = -3000");
+  }
+
+  // --- 十字キー上下どちらも離されたとき: ID6 0rpm ---
+  if (!dpadUp && !dpadDown && (prevDpadUp || prevDpadDown)) {
+    publishMotorRPM(6, 0);
+    console.log("[DPad Up/Down] released → ID6 = 0");
+  }
+
+  // prev 更新は判定の後
+  prevDpadUp = dpadUp;
+  prevDpadDown = dpadDown;
+
+  // --- ID1,2,3,4から目標値が0以外のものがあるか判定してID7を制御 ---
+  updateMotor7();
 
   requestAnimationFrame(updateLoop);
 }

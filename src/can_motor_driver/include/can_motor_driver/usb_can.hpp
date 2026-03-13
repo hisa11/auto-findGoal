@@ -8,10 +8,13 @@ class UsbCan {
   UsbCan(const std::string& ifname);
   ~UsbCan();
   bool is_open() const;
+  /// 未オープン時に再度オープンを試みる。成功すると true
+  bool try_open();
   bool send(const struct can_frame& frame);
   /// 非ブロッキングで 1 フレーム受信。受信できれば true、キューが空なら false
   bool recv(struct can_frame& frame);
   void drain();  // 受信バッファを全て読み捨ててバッファ溢れを防ぐ
  private:
+  std::string ifname_;
   int can_socket_;
 };

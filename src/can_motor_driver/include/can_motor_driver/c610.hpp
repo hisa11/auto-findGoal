@@ -49,8 +49,14 @@ class C610 {
   uint8_t get_temp(int id) const { return param_[id - 1].temp; }
   int16_t get_send_power(int id) const { return send_power_[id - 1]; }
 
+  /// 直近の send_message() での各フレーム送信結果
+  bool get_last_ok_200() const { return last_ok_200_; }
+  bool get_last_ok_1ff() const { return last_ok_1ff_; }
+
  private:
   UsbCan* can_bus_;
   int16_t send_power_[NUM_MOTORS]{};
-  C610Feedback param_[NUM_MOTORS];
+  C610Feedback param_[NUM_MOTORS]{};
+  bool last_ok_200_{false};
+  bool last_ok_1ff_{false};
 };

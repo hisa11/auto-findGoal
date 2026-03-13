@@ -18,7 +18,8 @@ export class ROSBridge {
     this._url = url;
     this._ws = null;
     this._ready = false;
-    this._advertised = new Set();
+    this._advertised = new Set();     // 現セッションで advertise 済み
+    this._advertisedTypes = new Map(); // topic → msgType (再接続時の再送用)
     this._subscribed = new Set();
     this._subscribers = {}; // topic -> [callback, ...]
     this._queue = []; // 接続前のメッセージを一時格納
@@ -49,6 +50,11 @@ export class ROSBridge {
       this._ready = true;
       this._applyStatus(true);
       console.log("[ROS] 接続完了:", this._url);
+      // 再接続時: 済みアドバタイズを再登録（publish より先に送る）
+      for (const [topic, msgType] of this._advertisedTypes) {
+        this._ws.send(JSON.stringify({ op: "advertise", topic, type: msgType }));
+        this._advertised.add(topic);
+      }
       // 接続前にキューされたメッセージをすべて送信
       for (const m of this._queue) this._ws.send(m);
       this._queue = [];
@@ -69,7 +75,7 @@ export class ROSBridge {
 
     this._ws.onclose = () => {
       this._ready = false;
-      this._advertised.clear();
+      this._advertised.clear(); // セッション送信済みフラグのみリセット（_advertisedTypes は保持）
       this._applyStatus(false);
       console.warn("[ROS] 切断 — 3 秒後に再接続します");
       setTimeout(() => this._connect(), 3000);
@@ -142,6 +148,7 @@ export class ROSBridge {
    * @param {string} msgType    メッセージ型 (例: 'std_msgs/msg/Float32')
    */
   advertise(topic, msgType) {
+    this._advertisedTypes.set(topic, msgType); // 再接続用に型を永続保存
     if (this._advertised.has(topic)) return;
     this._advertised.add(topic);
     this._send({ op: "advertise", topic, type: msgType });

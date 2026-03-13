@@ -53,6 +53,23 @@ StartupCmd TurretController::tick_startup() {
 // ============================================================
 void TurretController::step(int64_t now_ns) {
   std::lock_guard<std::mutex> lk(mtx_);
+
+  // --- yaw 角度の積分 ---
+  if (last_step_ns_ != 0) {
+    float dt = static_cast<float>(now_ns - last_step_ns_) * 1e-9f;
+    yaw_angle_deg_ += yaw_vel_ * dt * (180.0f / 3.14159265f);
+    // ±90° でクランプし、限界方向への速度を止める
+    if (yaw_angle_deg_ >= YAW_MAX_DEG) {
+      yaw_angle_deg_ = YAW_MAX_DEG;
+      if (yaw_vel_ > 0.0f) yaw_vel_ = 0.0f;
+    } else if (yaw_angle_deg_ <= YAW_MIN_DEG) {
+      yaw_angle_deg_ = YAW_MIN_DEG;
+      if (yaw_vel_ < 0.0f) yaw_vel_ = 0.0f;
+    }
+  }
+  last_step_ns_ = now_ns;
+
+  // --- ゴールタイムアウト ---
   if (!goal_detected_) return;
   double elapsed = static_cast<double>(now_ns - last_goal_ns_) * 1e-9;
   if (elapsed > GOAL_TIMEOUT_S) {
@@ -67,6 +84,11 @@ void TurretController::step(int64_t now_ns) {
 float TurretController::get_yaw_velocity() const {
   std::lock_guard<std::mutex> lk(mtx_);
   return yaw_vel_;
+}
+
+float TurretController::get_yaw_angle_deg() const {
+  std::lock_guard<std::mutex> lk(mtx_);
+  return yaw_angle_deg_;
 }
 
 float TurretController::get_pitch_rad() const {

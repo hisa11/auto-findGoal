@@ -17,9 +17,9 @@ void OmniController::update_cmd(double vx, double vy, double wz,
                                 int64_t stamp_ns) {
   using namespace omni_param;
   erpm_[0].store(mps_to_erpm(+vx - vy - wz * ROBOT_RADIUS));  // FL
-  erpm_[1].store(mps_to_erpm(+vx + vy + wz * ROBOT_RADIUS));  // FR
+  erpm_[1].store(mps_to_erpm(-vx - vy - wz * ROBOT_RADIUS));  // FR
   erpm_[2].store(mps_to_erpm(+vx + vy - wz * ROBOT_RADIUS));  // RL
-  erpm_[3].store(mps_to_erpm(+vx - vy + wz * ROBOT_RADIUS));  // RR
+  erpm_[3].store(mps_to_erpm(-vx + vy - wz * ROBOT_RADIUS));  // RR
   last_cmd_ns_.store(stamp_ns);
 }
 

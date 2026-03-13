@@ -13,7 +13,7 @@ class YoloGoalDetector(Node):
 
         # 【超重要】best.pt の絶対パスに書き換えてください！
         # 例: '/home/hisa/find-goal/best.pt'
-        self.model_path = '/home/hisa/best.pt' 
+        self.model_path = '/home/robotclub/auto-findGoal/best.onnx' 
         
         self.get_logger().info(f'YOLOモデルを読み込み中: {self.model_path}')
         self.model = YOLO(self.model_path)

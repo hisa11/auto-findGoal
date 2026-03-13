@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/python3
 import rclpy
 from rclpy.node import Node
 from sensor_msgs.msg import Image
@@ -34,7 +34,7 @@ class AdvancedYoloGoalDetector(Node):
         255, 0, 0), 2: (0, 255, 0), 3: (255, 255, 255)}
 
     # モデルの読み込み
-    self.model_path = '/home/hisa/ros2_ws/best.onnx'  # ★ONNX形式に変更
+    self.model_path = '/home/robotclub/auto-findGoal/best.onnx'  # ★ONNX形式に変更
     self.get_logger().info(
         f'YOLOモデルを読み込み中... 追従対象: {self.target_color_name}')
     self.model = YOLO(self.model_path, task='detect')
@@ -134,7 +134,11 @@ class AdvancedYoloGoalDetector(Node):
       return
 
     try:
-      frame = self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8')
+      # np.array(copy=True, order='C'): 必ず新しい書き込み可能な C-contiguous 配列を生成
+      # np.ascontiguousarray は既に C-contiguous な場合に同オブジェクト(readonly)を返すため不可
+      frame = np.array(
+          self.bridge.imgmsg_to_cv2(msg, desired_encoding='bgr8'),
+          dtype=np.uint8, copy=True, order='C')
     except Exception as e:
       return
 

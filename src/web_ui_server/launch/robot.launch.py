@@ -30,6 +30,7 @@ from launch.actions import (
     IncludeLaunchDescription,
     TimerAction,
     ExecuteProcess,
+    OpaqueFunction,
 )
 from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration
@@ -72,19 +73,27 @@ def generate_launch_description():
   _pkg_share = get_package_share_directory('web_ui_server')
 
   # ---- 1. ROSBridge WebSocket サーバー -------------------------
-  rosbridge_node = Node(
-      package='rosbridge_server',
-      executable='rosbridge_websocket',
-      name='rosbridge_websocket',
-      parameters=[{
-          'port': 9090,
-          'address': '0.0.0.0',
-          'ssl': True,
-          'certfile': os.path.join(_pkg_share, 'certs', '192.168.2.8+2.pem'),
-          'keyfile': os.path.join(_pkg_share, 'certs', '192.168.2.8+2-key.pem'),
-      }],
-      output='screen',
-  )
+  # use_https の値を実行時に評価するため OpaqueFunction で構築する
+  def make_rosbridge_node(context, *args, **kwargs):
+    pkg_share = get_package_share_directory('web_ui_server')
+    use_https = LaunchConfiguration('use_https').perform(context).lower() == 'true'
+    params = {
+        'port': 9090,
+        'address': '0.0.0.0',
+        'ssl': use_https,
+    }
+    if use_https:
+      params['certfile'] = os.path.join(pkg_share, 'certs', '192.168.2.200+2.pem')
+      params['keyfile'] = os.path.join(pkg_share, 'certs', '192.168.2.200+2-key.pem')
+    return [Node(
+        package='rosbridge_server',
+        executable='rosbridge_websocket',
+        name='rosbridge_websocket',
+        parameters=[params],
+        output='screen',
+    )]
+
+  rosbridge_node = OpaqueFunction(function=make_rosbridge_node)
 
   # ---- 2. WebUI HTTPS サーバー ---------------------------------
   webui_node = Node(
@@ -166,12 +175,36 @@ def generate_launch_description():
       condition=IfCondition(LaunchConfiguration('enable_camera')),
   )
 
+  # ---- 0. 起動前クリーンアップ (残留プロセス・ポート解放) -------
+  # fuser -k でポートとデバイスを直接解放する。
+  # ※ pkill (引数なし) はプロセス名の完全一致で探すため bash 自身にはマッチしない
+  # ※ pkill -f はコマンドライン全体を検索するため bash 自身を kill してしまう → 使わない
+  cleanup_action = ExecuteProcess(
+      cmd=[
+          'bash', '-c',
+          # ポート解放
+          'fuser -k 8443/tcp 2>/dev/null; '
+          'fuser -k 9090/tcp 2>/dev/null; '
+          # RealSense カメラデバイス解放 (残留 realsense2_camera_node を終了)
+          'pkill -9 realsense2_camera_node 2>/dev/null; '
+          'fuser -k /dev/video* 2>/dev/null; '
+          'sleep 0.5; echo "[cleanup] ポート・カメラデバイス解放完了"',
+      ],
+      output='screen',
+  )
+
   # ---- LaunchDescription 組み立て -----------------------------
   return LaunchDescription(args + [
-      rosbridge_node,   # WebSocket ブリッジ
-      webui_node,       # WebUI サーバー
-      main_node,        # CAN 全制御 (常時起動)
-      realsense_node,   # カメラ (enable_camera=true のみ)
-      camera_params_action,  # 露出強制セット (3秒後)
-      yolo_node,        # YOLO 検出 (enable_camera=true のみ)
+      cleanup_action,        # 起動前クリーンアップ
+      TimerAction(           # クリーンアップ完了を待ってから各ノード起動
+          period=2.0,
+          actions=[
+              rosbridge_node,   # WebSocket ブリッジ (use_https に連動)
+              webui_node,       # WebUI サーバー
+              main_node,        # CAN 全制御 (常時起動)
+              realsense_node,   # カメラ (enable_camera=true のみ)
+              camera_params_action,  # 露出強制セット (3秒後)
+              yolo_node,        # YOLO 検出 (enable_camera=true のみ)
+          ],
+      ),
   ])

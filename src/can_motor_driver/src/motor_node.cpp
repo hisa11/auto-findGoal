@@ -43,10 +43,10 @@
 // ============================================================
 // VESC の CAN ID (各ホイールに割り当て)
 // VESC Tool の Motor Configuration → General → Motor ID に合わせる
-static constexpr uint8_t VESC_ID_FL = 1;  // 前左
-static constexpr uint8_t VESC_ID_FR = 2;  // 前右
-static constexpr uint8_t VESC_ID_RL = 3;  // 後左
-static constexpr uint8_t VESC_ID_RR = 4;  // 後右
+static constexpr uint8_t VESC_ID_FL = 12;  // 前左
+static constexpr uint8_t VESC_ID_FR = 13;  // 前右
+static constexpr uint8_t VESC_ID_RL = 10;  // 後左
+static constexpr uint8_t VESC_ID_RR = 11;  // 後右
 
 // ロボット中心からホイールまでの距離 (旋回半径) [m]
 static constexpr double ROBOT_RADIUS = 0.15;
